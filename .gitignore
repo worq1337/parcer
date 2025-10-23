@@ -68,3 +68,6 @@ __pycache__/
 
 # Git backup folder
 .git-backup/
+
+# Build updates (distributed via GitHub Releases)
+updates/

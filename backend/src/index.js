@@ -9,6 +9,7 @@ const operatorRoutes = require('./routes/operatorRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const ingestRoutes = require('./routes/ingestRoutes'); // patch-017 §7
 const notificationRoutes = require('./routes/notificationRoutes'); // patch-017 §5
+const licenseRoutes = require('./routes/licenseRoutes'); // patch-022: license key validation
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -33,6 +34,7 @@ app.use('/api/operators', operatorRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/ingest', ingestRoutes); // patch-017 §7
 app.use('/api/notifications', notificationRoutes); // patch-017 §5
+app.use('/api/license', licenseRoutes); // patch-022: license key validation
 
 // Корневой маршрут
 app.get('/', (req, res) => {

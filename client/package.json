@@ -1,9 +1,9 @@
 {
   "name": "receipt-parser-client",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Desktop приложение для парсера банковских чеков",
   "homepage": ".",
-  "author": "asintiko",
+  "author": "",
   "repository": {
     "type": "git",
     "url": "https://github.com/asintiko/receipt-parser.git"
@@ -23,7 +23,6 @@
     "electron",
     "react"
   ],
-  "author": "",
   "license": "ISC",
   "dependencies": {
     "@iconify/react": "^6.0.2",
@@ -50,6 +49,7 @@
     "cross-env": "^7.0.3",
     "electron": "^25.9.0",
     "electron-builder": "^24.9.1",
+    "electron-icon-builder": "^2.0.1",
     "wait-on": "^7.2.0"
   },
   "browserslist": {
@@ -87,11 +87,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/icon.icns",
@@ -116,11 +122,16 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": [
+            "x64",
+            "ia32"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico",
@@ -135,7 +146,10 @@
       "shortcutName": "Receipt Parser"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Office",
       "icon": "assets/icon.png"
     }

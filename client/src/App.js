@@ -16,6 +16,9 @@ import AddCheckModal from './components/AddCheckModal';
 import CheckDetailsModal from './components/CheckDetailsModal';
 import HelpModal from './components/HelpModal'; // patch-006 §9
 import HotkeysModal from './components/HotkeysModal'; // patch-010 §4
+import UpdateBanner from './components/UpdateBanner'; // patch-021: Updates banner
+import SplashScreen from './components/SplashScreen'; // patch-021: Splash screen
+import LicenseKeyModal from './components/LicenseKeyModal'; // patch-022: License key validation
 
 import { useChecksStore } from './state/checksStore';
 import { useFiltersStore } from './state/filtersStore';
@@ -42,6 +45,10 @@ function App() {
   const [filterScrollSection, setFilterScrollSection] = useState(null);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false); // patch-006 §9
   const [isHotkeysModalOpen, setIsHotkeysModalOpen] = useState(false); // patch-010 §4
+  const [showSplash, setShowSplash] = useState(true); // patch-021: Splash screen
+  const [showUpdateBanner, setShowUpdateBanner] = useState(true); // patch-021: Update banner
+  const [isLicenseValid, setIsLicenseValid] = useState(false); // patch-022: License validation
+  const [showLicenseModal, setShowLicenseModal] = useState(false); // patch-022: License modal
 
   const { loadChecks, checks } = useChecksStore();
   const resolvedTheme = useSettingsStore((state) => state.resolvedTheme);
@@ -53,10 +60,30 @@ function App() {
   const gridApiRef = useRef(null); // patch-013
   const formulaBarRef = useRef(null); // patch-013
 
-  // Загрузка данных при монтировании
+  // patch-022: Проверка лицензионного ключа при первом запуске
   useEffect(() => {
-    loadChecks();
-  }, [loadChecks]);
+    const licenseActivated = localStorage.getItem('licenseActivated');
+    if (licenseActivated === 'true') {
+      setIsLicenseValid(true);
+    } else {
+      setShowLicenseModal(true);
+    }
+  }, []);
+
+  // Загрузка данных при монтировании (только после активации лицензии)
+  useEffect(() => {
+    if (isLicenseValid) {
+      loadChecks();
+    }
+  }, [loadChecks, isLicenseValid]);
+
+  // Обработчик успешной валидации лицензии
+  const handleLicenseValidated = (isValid) => {
+    if (isValid) {
+      setIsLicenseValid(true);
+      setShowLicenseModal(false);
+    }
+  };
 
   // patch-017 §5: Инициализация notification service
   useEffect(() => {
@@ -102,16 +129,28 @@ function App() {
 
   // Auto-updater hook - проверка обновлений в фоне
   const {
+    updateInfo,
     isUpdateAvailable,
     isDownloading,
     downloadProgress,
     isUpdateDownloaded,
     checkForUpdates,
+    downloadUpdate,
+    installUpdate,
   } = useAutoUpdater();
 
   const handleRefresh = () => {
     loadChecks();
     toast.success('Данные обновлены');
+  };
+
+  // patch-021: Handlers для UpdateBanner
+  const handleDismissUpdateBanner = () => {
+    setShowUpdateBanner(false);
+  };
+
+  const handleSplashReady = () => {
+    setShowSplash(false);
   };
 
   const handleCheckDetails = (check) => {
@@ -342,6 +381,23 @@ function App() {
 
   return (
     <div className="app">
+      {/* patch-021: Splash screen при запуске */}
+      {showSplash && <SplashScreen onReady={handleSplashReady} />}
+
+      {/* patch-021: Update banner */}
+      {showUpdateBanner && (
+        <UpdateBanner
+          updateInfo={updateInfo}
+          isUpdateAvailable={isUpdateAvailable}
+          isDownloading={isDownloading}
+          downloadProgress={downloadProgress}
+          isUpdateDownloaded={isUpdateDownloaded}
+          onDownload={downloadUpdate}
+          onInstall={installUpdate}
+          onDismiss={handleDismissUpdateBanner}
+        />
+      )}
+
       <Header
         currentView={currentView}
         onViewChange={setCurrentView}
@@ -496,6 +552,11 @@ function App() {
           background: 'var(--color-accent-primary)',
         }}
       />
+
+      {/* patch-022: Модальное окно активации лицензии */}
+      {showLicenseModal && !isLicenseValid && (
+        <LicenseKeyModal onValidate={handleLicenseValidated} />
+      )}
     </div>
   );
 }

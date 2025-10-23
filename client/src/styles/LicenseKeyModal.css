@@ -1,0 +1,143 @@
+.license-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.license-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.license-modal-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.license-modal-header h2 {
+  margin: 0 0 10px 0;
+  font-size: 24px;
+  color: #333;
+}
+
+.license-modal-header p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.license-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.license-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.license-input-group label {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.license-input-group input {
+  padding: 12px 16px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.license-input-group input:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.license-input-group input.error {
+  border-color: #f44336;
+}
+
+.license-input-group input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.license-error {
+  color: #f44336;
+  font-size: 13px;
+  margin-top: 4px;
+  animation: shake 0.3s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.license-submit-btn {
+  padding: 14px 24px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.license-submit-btn:hover:not(:disabled) {
+  background: #45a049;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.license-submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.license-submit-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.license-footer {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.license-footer p {
+  margin: 0;
+  font-size: 12px;
+  color: #999;
+}

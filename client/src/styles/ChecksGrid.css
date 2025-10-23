@@ -1,0 +1,659 @@
+/* Стили для таблицы чеков - patch-006-excel-parity-and-ux-cleanup.md §2, §13 */
+
+.checks-grid-container {
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+.checks-grid-container.is-selecting,
+.checks-grid-container.is-selecting * {
+  user-select: none !important;
+}
+
+.grid-context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: transparent;
+}
+
+/* Кастомизация AG Grid для соответствия дизайну */
+/* patch-016-fix: Переведено на CSS-токены для поддержки тёмной темы */
+.ag-theme-alpine {
+  /* patch-007 §3: UI-шрифт с табличными цифрами */
+  --ag-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', 'Roboto', Arial, sans-serif;
+  --ag-font-size: 14px;
+  --ag-row-height: 36px;
+  --ag-header-height: 44px;
+  --ag-header-foreground-color: var(--table-header-fg);
+  --ag-header-background-color: var(--table-header-bg);
+  --ag-odd-row-background-color: var(--table-row-bg);
+  --ag-background-color: var(--table-row-bg);
+  --ag-foreground-color: var(--color-text-primary);
+  --ag-row-hover-color: var(--table-row-hover);
+  --ag-selected-row-background-color: var(--grid-cell-selected);
+  --ag-range-selection-border-color: var(--color-accent-primary);
+  --ag-border-color: var(--table-border);
+  --ag-cell-horizontal-padding: 12px;
+
+  /* patch-007 §3: Табличные цифры для выравнивания */
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+/* Режимы плотности (patch-007 §3) */
+.ag-theme-alpine.density-compact {
+  --ag-row-height: 28px;
+  --ag-header-height: 36px;
+  --ag-cell-horizontal-padding: 6px;
+  --ag-font-size: 13px; /* patch-007 §3: компактный режим 13px */
+}
+
+.ag-theme-alpine.density-standard {
+  --ag-row-height: 36px;
+  --ag-header-height: 44px;
+  --ag-cell-horizontal-padding: 10px;
+  --ag-font-size: 14px;
+}
+
+.ag-theme-alpine.density-large {
+  --ag-row-height: 44px;
+  --ag-header-height: 52px;
+  --ag-cell-horizontal-padding: 14px;
+  --ag-font-size: 14px;
+}
+
+/* Стили для ячеек (patch-006 §2, §5) */
+.cell-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-centered {
+  text-align: center !important;
+}
+
+.cell-monospace {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* patch-007 §6: Границы ячеек как в Excel */
+/* patch-016-fix: Переведено на токены */
+.ag-theme-alpine .ag-cell {
+  border-right: 1px solid var(--table-border); /* вертикальные линии */
+  border-bottom: 1px solid var(--table-border); /* горизонтальные линии */
+}
+
+.ag-theme-alpine .ag-row {
+  border-bottom: 1px solid var(--table-border);
+}
+
+/* patch-007 §6: Excel-подобные выделения */
+.ag-cell-focus {
+  border: 2px solid var(--color-accent-primary) !important; /* толще граница активной ячейки */
+  outline: none;
+  z-index: 1;
+}
+
+.ag-cell-range-selected:not(.ag-cell-focus) {
+  background-color: var(--grid-cell-selected) !important;
+  opacity: 0.5;
+}
+
+/* Выделение заголовка/строки */
+.ag-header-cell-resize::after {
+  background-color: var(--color-accent-primary);
+}
+
+.ag-row-selected {
+  background-color: var(--grid-cell-selected) !important;
+  opacity: 0.5;
+}
+
+/* Заголовки (patch-006 §13) */
+.ag-header-cell-label {
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* patch-006 §13: Минимальные ширины колонок */
+.ag-header-cell[col-id="id"] {
+  min-width: 64px !important;
+}
+
+.ag-header-cell[col-id="datetime"] {
+  min-width: 180px !important;
+}
+
+.ag-header-cell[col-id="weekday"] {
+  min-width: 56px !important;
+}
+
+.ag-header-cell[col-id="date_display"] {
+  min-width: 84px !important;
+}
+
+.ag-header-cell[col-id="time_display"] {
+  min-width: 72px !important;
+}
+
+.ag-header-cell[col-id="operator"] {
+  min-width: 260px !important;
+}
+
+.ag-header-cell[col-id="app"] {
+  min-width: 120px !important;
+}
+
+.ag-header-cell[col-id="amount"] {
+  min-width: 140px !important;
+}
+
+.ag-header-cell[col-id="balance"] {
+  min-width: 140px !important;
+}
+
+.ag-header-cell[col-id="card_last4"] {
+  min-width: 84px !important;
+}
+
+.ag-header-cell[col-id="is_p2p"] {
+  min-width: 72px !important;
+}
+
+.ag-header-cell[col-id="transaction_type"] {
+  min-width: 140px !important;
+}
+
+.ag-header-cell[col-id="currency"] {
+  min-width: 84px !important;
+}
+
+.ag-header-cell[col-id="source"] {
+  min-width: 120px !important;
+}
+
+/* Тултипы для заголовков (patch-006 §13) */
+.ag-header-cell-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Иконки фильтра в заголовке */
+.ag-header-icon {
+  color: var(--color-accent-primary);
+}
+
+/* Редактирование (patch-006 §1) */
+.ag-cell-inline-editing {
+  background-color: var(--grid-edit-bg) !important;
+  border: 2px solid var(--grid-edit-border) !important;
+  padding: 10px;
+}
+
+/* patch-006 §3: Fill handle (ручка заполнения) */
+.ag-fill-handle {
+  background-color: var(--color-accent-primary);
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--grid-fill-handle-border);
+}
+
+/* Индикатор загрузки */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--loading-overlay-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--spinner-track);
+  border-top: 4px solid var(--spinner-indicator);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--loading-overlay-text);
+}
+
+/* Контекстное меню */
+.ag-menu {
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  border: 1px solid var(--menu-border);
+}
+
+.ag-menu-option-active {
+  background-color: var(--menu-hover-bg);
+}
+
+.ag-menu-option-icon {
+  width: 20px;
+  text-align: center;
+}
+
+/* Пинированные колонки */
+.ag-pinned-left-header,
+.ag-pinned-left-cols-container {
+  box-shadow: var(--shadow-sm);
+}
+
+/* Чекбоксы */
+.ag-checkbox-input-wrapper {
+  font-size: 16px;
+}
+
+.ag-checkbox-input-wrapper.ag-checked::after {
+  color: var(--color-accent-primary);
+}
+
+/* Фильтры */
+.ag-filter {
+  border-radius: 8px;
+}
+
+.ag-filter-apply-panel-button {
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Скроллбары */
+.ag-body-horizontal-scroll,
+.ag-body-vertical-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.ag-body-horizontal-scroll::-webkit-scrollbar,
+.ag-body-vertical-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ag-body-horizontal-scroll::-webkit-scrollbar-track,
+.ag-body-vertical-scroll::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.ag-body-horizontal-scroll::-webkit-scrollbar-thumb,
+.ag-body-vertical-scroll::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+.ag-body-horizontal-scroll::-webkit-scrollbar-thumb:hover,
+.ag-body-vertical-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Скроллбары */
+.grid-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 220px;
+  padding: 4px 0;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  color: var(--menu-color);
+  font-size: 13px;
+  user-select: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.grid-context-submenu {
+  z-index: 10001;
+  min-width: 200px;
+  margin-left: -4px;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  color: var(--menu-color);
+}
+
+.grid-context-menu__item {
+  width: 100%;
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.grid-context-menu__item:hover {
+  background: var(--menu-hover-bg);
+}
+
+.grid-context-menu__item--disabled,
+.grid-context-menu__item:disabled {
+  color: var(--color-text-tertiary);
+  cursor: default;
+  background: transparent;
+  opacity: var(--menu-disabled-opacity);
+}
+
+.grid-context-menu__item--active span:last-child {
+  font-weight: 600;
+}
+
+.grid-context-menu__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grid-context-menu__shortcut-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.grid-context-menu__item--submenu .grid-context-menu__shortcut-container {
+  justify-content: flex-end;
+}
+
+.grid-context-menu__arrow {
+  font-size: 11px;
+  color: var(--menu-icon-color);
+}
+
+.grid-context-menu__item--submenu-open {
+  background: var(--color-accent-light);
+}
+
+.grid-context-submenu {
+  z-index: 10001;
+  min-width: 200px;
+}
+
+.grid-context-menu__bullet {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent-primary);
+}
+
+.grid-context-menu__separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--menu-divider-color);
+}
+
+.grid-context-menu__shortcut {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-left: auto;
+}
+
+.grid-context-menu__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.grid-context-menu__item.submenu-open {
+  background: var(--menu-hover-bg);
+}
+
+.selection-stats-popover {
+  position: fixed;
+  z-index: 9999;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+  color: var(--color-text-primary);
+}
+
+.selection-stats-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.selection-stats-popover__title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.selection-stats-popover__close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: 0;
+}
+
+.selection-stats-popover__modes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.selection-stats-popover__mode {
+  flex: 1;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.selection-stats-popover__mode.is-active {
+  background: var(--color-accent-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-accent-primary);
+}
+
+.selection-stats-popover__stats {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.selection-stats-popover__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.selection-stats-popover__label {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.selection-stats-popover__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.selection-stats-popover__copy {
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-accent-primary);
+  color: var(--color-text-inverse);
+  font-weight: 500;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.selection-stats-popover__copy:hover {
+  background: var(--color-accent-hover);
+}
+
+.selection-stats-popover__empty {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  padding: 12px;
+  background: var(--color-bg-tertiary);
+  border-radius: 6px;
+  border: 1px dashed var(--color-border-primary);
+  text-align: center;
+}
+
+.paste-special-popover {
+  position: fixed;
+  z-index: 10001;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+  color: var(--color-text-primary);
+}
+
+.paste-special-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.paste-special-popover__title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.paste-special-popover__close {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.paste-special-popover__options {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.paste-special-popover__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.paste-special-popover__option:hover {
+  border-color: var(--color-accent-primary);
+  background: var(--menu-hover-bg);
+}
+
+.paste-special-popover__option-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.paste-special-popover__option-description {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.paste-special-popover__hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+/* Info button styles */
+.ag-theme-alpine .ag-cell[col-id="info"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: visible;
+}
+
+.ag-theme-alpine .ag-cell[col-id="info"] button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent-primary);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  opacity: 0.7;
+}
+
+.ag-theme-alpine .ag-cell[col-id="info"] button:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.ag-theme-alpine .ag-cell[col-id="info"] button:active {
+  transform: scale(0.95);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .ag-theme-alpine {
+    --ag-font-size: 12px;
+    --ag-row-height: 32px;
+    --ag-cell-horizontal-padding: 8px;
+  }
+}

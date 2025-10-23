@@ -1,0 +1,249 @@
+/* patch-011 §1: Единые дизайн-токены для всех меню */
+/* patch-016-fix: Добавлена поддержка тёмной темы */
+
+:root {
+  /* Цвета меню - светлая тема */
+  --menu-bg: #fff;
+  --menu-color: #111827;
+  --menu-border: #E5E7EB;
+  --menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* Геометрия */
+  --menu-radius: 8px;
+  --menu-padding-vertical: 12px;
+  --menu-padding-horizontal: 14px;
+  --menu-line-height: 1.35;
+
+  /* Ховер состояния */
+  --menu-hover-bg: #F3F4F6;
+
+  /* Иконки */
+  --menu-icon-color: #6B7280;
+
+  /* Анимация */
+  --menu-animation-duration: 120ms;
+  --menu-animation-timing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Разделитель */
+  --menu-divider-color: #E5E7EB;
+
+  /* Danger состояние */
+  --menu-danger-color: #DC2626;
+  --menu-danger-hover-bg: #FEE2E2;
+
+  /* Disabled состояние */
+  --menu-disabled-opacity: 0.5;
+}
+
+/* Тёмная тема */
+[data-theme="dark"] {
+  /* Цвета меню - тёмная тема */
+  --menu-bg: #2c2c2c;
+  --menu-color: #e0e0e0;
+  --menu-border: #444444;
+  --menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+  /* Ховер состояния */
+  --menu-hover-bg: #3a3a3a;
+
+  /* Иконки */
+  --menu-icon-color: #b0b0b0;
+
+  /* Разделитель */
+  --menu-divider-color: #444444;
+
+  /* Danger состояние */
+  --menu-danger-color: #ef5350;
+  --menu-danger-hover-bg: #3a2020;
+}
+
+/* Системная тёмная тема */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Цвета меню - тёмная тема */
+    --menu-bg: #2c2c2c;
+    --menu-color: #e0e0e0;
+    --menu-border: #444444;
+    --menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+    /* Ховер состояния */
+    --menu-hover-bg: #3a3a3a;
+
+    /* Иконки */
+    --menu-icon-color: #b0b0b0;
+
+    /* Разделитель */
+    --menu-divider-color: #444444;
+
+    /* Danger состояние */
+    --menu-danger-color: #ef5350;
+    --menu-danger-hover-bg: #3a2020;
+  }
+}
+
+/* Базовый класс для всех меню */
+.unified-menu {
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  color: var(--menu-color);
+  font-size: 14px;
+  line-height: var(--menu-line-height);
+  padding: 4px 0;
+  z-index: 10000;
+}
+
+/* Анимация появления для всех меню */
+.unified-menu {
+  animation: unifiedMenuFadeIn var(--menu-animation-duration) var(--menu-animation-timing);
+}
+
+@keyframes unifiedMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Базовый пункт меню */
+.unified-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: var(--menu-padding-vertical) var(--menu-padding-horizontal);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--menu-color);
+  transition: background-color var(--menu-animation-duration) var(--menu-animation-timing);
+  position: relative;
+  white-space: nowrap;
+  line-height: var(--menu-line-height);
+}
+
+.unified-menu-item:hover {
+  background-color: var(--menu-hover-bg);
+}
+
+.unified-menu-item span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Иконки */
+.unified-menu-item .icon {
+  flex-shrink: 0;
+  color: var(--menu-icon-color);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unified-menu-item:hover .icon {
+  color: var(--menu-color);
+}
+
+/* Разделитель */
+.unified-menu-divider {
+  height: 1px;
+  background-color: var(--menu-divider-color);
+  margin: 4px 0;
+}
+
+/* Submenu arrow */
+.unified-submenu-arrow {
+  margin-left: auto;
+  opacity: 0.5;
+  color: var(--menu-icon-color);
+}
+
+/* Submenu */
+.unified-submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  min-width: 180px;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  padding: 4px 0;
+  margin-left: 2px;
+  z-index: 10001;
+  animation: unifiedMenuFadeIn var(--menu-animation-duration) var(--menu-animation-timing);
+}
+
+/* Danger item */
+.unified-menu-item-danger {
+  color: var(--menu-danger-color);
+}
+
+.unified-menu-item-danger:hover {
+  background-color: var(--menu-danger-hover-bg);
+}
+
+.unified-menu-item-danger .icon {
+  color: var(--menu-danger-color);
+}
+
+/* Disabled state */
+.unified-menu-item:disabled,
+.unified-menu-item.disabled {
+  opacity: var(--menu-disabled-opacity);
+  cursor: not-allowed;
+}
+
+.unified-menu-item:disabled:hover,
+.unified-menu-item.disabled:hover {
+  background-color: transparent;
+}
+
+/* Checkbox/Radio в меню */
+.unified-menu-item-checkmark {
+  width: 16px;
+  height: 16px;
+  margin-right: -6px;
+  visibility: hidden;
+}
+
+.unified-menu-item-checked .unified-menu-item-checkmark {
+  visibility: visible;
+}
+
+/* Секция меню с заголовком */
+.unified-menu-section {
+  padding: 0;
+}
+
+.unified-menu-section-title {
+  padding: 8px var(--menu-padding-horizontal);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--menu-icon-color);
+  letter-spacing: 0.05em;
+}
+
+/* Shortcut hint */
+.unified-menu-shortcut {
+  margin-left: auto;
+  padding-left: 20px;
+  font-size: 11px;
+  color: var(--menu-icon-color);
+  opacity: 0.7;
+}
+
+/* Tabular numbers для чисел в меню */
+.unified-menu {
+  font-variant-numeric: tabular-nums;
+}

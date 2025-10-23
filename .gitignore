@@ -1,0 +1,67 @@
+# Node modules
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+client/build/
+client/dist/
+backend/backups/
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation (НЕ загружаем на GitHub, только README)
+CLAUDE.md
+DEPLOYMENT.md
+DEPLOYMENT-NO-DOMAIN.md
+SETUP.md
+START.md
+QUICKSTART.md
+IMPLEMENTATION.md
+PATCH-*.md
+patch-*.md
+docks/
+todo.md
+*.txt
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Electron builder cache
+.electron-builder/

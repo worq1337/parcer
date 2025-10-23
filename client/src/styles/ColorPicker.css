@@ -1,0 +1,77 @@
+/* patch-011 §2: Палитра цветов для фона ячеек */
+
+.color-picker {
+  position: absolute;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  padding: 12px;
+  z-index: 10002;
+  min-width: 240px;
+  animation: menuFadeIn var(--menu-animation-duration) var(--menu-animation-timing);
+}
+
+.color-picker-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--menu-icon-color);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.color-picker-swatch {
+  width: 64px;
+  height: 48px;
+  border: 2px solid var(--menu-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-clip: padding-box;
+}
+
+.color-picker-swatch:hover {
+  border-color: var(--menu-icon-color);
+  transform: scale(1.05);
+}
+
+.color-picker-swatch.selected {
+  border-color: var(--color-accent-primary);
+  border-width: 3px;
+  box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+
+.color-picker-checkmark {
+  color: var(--color-accent-primary);
+  font-size: 20px;
+  font-weight: bold;
+  text-shadow: 0 0 2px var(--modal-bg), 0 0 4px var(--modal-bg);
+}
+
+.color-picker-none-icon {
+  color: var(--menu-icon-color);
+  font-size: 24px;
+  font-weight: normal;
+}
+
+/* Специальный стиль для прозрачного цвета */
+.color-picker-swatch[style*="transparent"] {
+  background-image:
+    linear-gradient(45deg, var(--color-bg-tertiary) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--color-bg-tertiary) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--color-bg-tertiary) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--color-bg-tertiary) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+}

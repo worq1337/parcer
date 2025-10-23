@@ -1,0 +1,79 @@
+/* patch-010 §1: Стили для кастомного заголовка колонки */
+
+.column-header-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  padding: 0 8px;
+  gap: 4px;
+}
+
+.column-header-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.column-menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.column-menu-button:hover {
+  background: var(--color-bg-hover);
+  opacity: 1;
+  color: var(--color-text-primary);
+}
+
+.column-menu-button.active {
+  background: var(--color-bg-tertiary);
+  opacity: 1;
+  color: var(--color-accent-primary);
+}
+
+.column-menu-button:active {
+  transform: scale(0.95);
+}
+
+/* Убираем стандартный outline при фокусе */
+.column-menu-button:focus {
+  outline: none;
+}
+
+/* Адаптация под плотность ячеек */
+.density-compact .column-header-container {
+  padding: 0 4px;
+  gap: 2px;
+}
+
+.density-compact .column-menu-button {
+  width: 16px;
+  height: 16px;
+}
+
+.density-large .column-header-container {
+  padding: 0 10px;
+  gap: 6px;
+}
+
+.density-large .column-menu-button {
+  width: 24px;
+  height: 24px;
+}

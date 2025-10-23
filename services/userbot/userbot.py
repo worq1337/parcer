@@ -1,0 +1,292 @@
+"""
+patch-017 §4: Telethon Userbot
+
+Мониторит сообщения от банковских ботов и пересылает их в наш бот для обработки
+"""
+
+import os
+import asyncio
+import requests
+from telethon import TelegramClient, events
+from telethon.tl.types import User
+import config
+
+
+class UserbotManager:
+    """
+    Управление Telethon userbot
+
+    Функции:
+    - Логин по номеру телефона
+    - Мониторинг сообщений от указанных ботов
+    - Пересылка сообщений в наш бот
+    - Управление статусом (start/stop)
+    """
+
+    def __init__(self):
+        self.client = None
+        self.is_running = False
+        self.session_path = os.path.join(config.SESSION_DIR, config.SESSION_NAME)
+
+        # Обработчик для новых сообщений
+        self.new_message_handler = None
+
+    async def initialize(self):
+        """
+        Инициализация Telethon клиента
+        """
+        if not config.API_ID or not config.API_HASH:
+            raise ValueError("TELEGRAM_API_ID и TELEGRAM_API_HASH должны быть установлены")
+
+        self.client = TelegramClient(
+            self.session_path,
+            config.API_ID,
+            config.API_HASH,
+            system_version='4.16.30-vxCUSTOM'
+        )
+
+        # Регистрируем обработчик сообщений
+        @self.client.on(events.NewMessage)
+        async def message_handler(event):
+            await self.handle_new_message(event)
+
+        self.new_message_handler = message_handler
+
+        print("✅ Telethon клиент инициализирован")
+
+    async def login(self, phone_number, code=None, password=None):
+        """
+        Логин через номер телефона
+
+        Args:
+            phone_number: str - номер телефона в формате +998901234567
+            code: str - код из SMS (если уже получен)
+            password: str - 2FA пароль (если включена двухфакторная аутентификация)
+
+        Returns:
+            dict - статус логина
+        """
+        try:
+            await self.client.connect()
+
+            if await self.client.is_user_authorized():
+                me = await self.client.get_me()
+                return {
+                    'success': True,
+                    'status': 'already_authorized',
+                    'user': {
+                        'id': me.id,
+                        'first_name': me.first_name,
+                        'last_name': me.last_name,
+                        'username': me.username,
+                        'phone': me.phone
+                    }
+                }
+
+            # Отправляем код
+            if not code:
+                await self.client.send_code_request(phone_number)
+                return {
+                    'success': True,
+                    'status': 'code_sent',
+                    'message': f'Код отправлен на {phone_number}'
+                }
+
+            # Вводим код
+            try:
+                await self.client.sign_in(phone_number, code)
+
+                me = await self.client.get_me()
+                return {
+                    'success': True,
+                    'status': 'authorized',
+                    'user': {
+                        'id': me.id,
+                        'first_name': me.first_name,
+                        'last_name': me.last_name,
+                        'username': me.username,
+                        'phone': me.phone
+                    }
+                }
+
+            except Exception as code_error:
+                # Требуется 2FA пароль
+                if 'Two-step verification' in str(code_error) or 'SessionPasswordNeededError' in str(type(code_error)):
+                    if not password:
+                        return {
+                            'success': False,
+                            'status': 'password_required',
+                            'message': 'Требуется 2FA пароль'
+                        }
+
+                    await self.client.sign_in(password=password)
+
+                    me = await self.client.get_me()
+                    return {
+                        'success': True,
+                        'status': 'authorized',
+                        'user': {
+                            'id': me.id,
+                            'first_name': me.first_name,
+                            'last_name': me.last_name,
+                            'username': me.username,
+                            'phone': me.phone
+                        }
+                    }
+                else:
+                    raise code_error
+
+        except Exception as e:
+            return {
+                'success': False,
+                'status': 'error',
+                'error': str(e)
+            }
+
+    async def start(self):
+        """
+        Запуск userbot мониторинга
+        """
+        if not self.client:
+            await self.initialize()
+
+        await self.client.connect()
+
+        if not await self.client.is_user_authorized():
+            return {
+                'success': False,
+                'error': 'Userbot не авторизован. Выполните логин сначала.'
+            }
+
+        # Запускаем клиент
+        await self.client.start()
+        self.is_running = True
+
+        me = await self.client.get_me()
+
+        print(f"🤖 Userbot запущен: {me.first_name} (@{me.username})")
+        print(f"📡 Мониторим ботов: {config.MONITOR_BOT_IDS}")
+        print(f"🎯 Пересылаем в бот: {config.OUR_BOT_ID}")
+
+        return {
+            'success': True,
+            'message': f'Userbot запущен как {me.first_name}',
+            'user': {
+                'id': me.id,
+                'first_name': me.first_name,
+                'last_name': me.last_name,
+                'username': me.username,
+                'phone': me.phone
+            }
+        }
+
+    async def stop(self):
+        """
+        Остановка userbot
+        """
+        if self.client and self.client.is_connected():
+            await self.client.disconnect()
+
+        self.is_running = False
+
+        return {
+            'success': True,
+            'message': 'Userbot остановлен'
+        }
+
+    async def get_status(self):
+        """
+        Получить текущий статус userbot
+        """
+        if not self.client:
+            return {
+                'running': False,
+                'authorized': False
+            }
+
+        try:
+            if not self.client.is_connected():
+                await self.client.connect()
+
+            is_authorized = await self.client.is_user_authorized()
+
+            if is_authorized:
+                me = await self.client.get_me()
+                return {
+                    'running': self.is_running,
+                    'authorized': True,
+                    'user': {
+                        'id': me.id,
+                        'first_name': me.first_name,
+                        'last_name': me.last_name,
+                        'username': me.username,
+                        'phone': me.phone
+                    }
+                }
+            else:
+                return {
+                    'running': self.is_running,
+                    'authorized': False
+                }
+
+        except Exception as e:
+            return {
+                'running': False,
+                'authorized': False,
+                'error': str(e)
+            }
+
+    async def handle_new_message(self, event):
+        """
+        Обработчик новых сообщений
+
+        Проверяет, пришло ли сообщение от одного из мониторимых ботов,
+        и пересылает его в наш бот для обработки
+        """
+        try:
+            # Получаем отправителя
+            sender = await event.get_sender()
+
+            # Проверяем, является ли отправитель одним из мониторимых ботов
+            if isinstance(sender, User) and sender.id in config.MONITOR_BOT_IDS:
+                print(f"📨 Получено сообщение от бота {sender.id} ({sender.first_name})")
+
+                # Получаем текст сообщения
+                message_text = event.message.text
+
+                if not message_text:
+                    print("⚠️ Сообщение без текста, пропускаем")
+                    return
+
+                # Пересылаем сообщение в наш бот
+                try:
+                    await self.client.send_message(
+                        config.OUR_BOT_ID,
+                        message_text
+                    )
+
+                    print(f"✅ Сообщение переслано в бот {config.OUR_BOT_ID}")
+
+                except Exception as forward_error:
+                    print(f"❌ Ошибка пересылки: {forward_error}")
+
+        except Exception as e:
+            print(f"❌ Ошибка обработки сообщения: {e}")
+
+    async def run_until_disconnected(self):
+        """
+        Запуск userbot в режиме постоянной работы
+        """
+        if not self.client:
+            await self.initialize()
+
+        await self.start()
+
+        print("🔄 Userbot работает в фоновом режиме...")
+        print("📡 Ожидание сообщений от банковских ботов...")
+
+        await self.client.run_until_disconnected()
+
+
+# Глобальный экземпляр userbot manager
+userbot_manager = UserbotManager()

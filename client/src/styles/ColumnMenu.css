@@ -1,0 +1,156 @@
+/* patch-011 §1: Стили для меню колонки - унифицированный стиль */
+
+.column-menu {
+  min-width: 220px;
+  max-width: 280px;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  padding: 4px 0;
+  font-size: 14px;
+  z-index: 10000;
+  color: var(--menu-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-section {
+  padding: 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: var(--menu-padding-vertical) var(--menu-padding-horizontal);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--menu-color);
+  transition: background-color var(--menu-animation-duration) var(--menu-animation-timing);
+  position: relative;
+  white-space: nowrap;
+  line-height: var(--menu-line-height);
+}
+
+.menu-item:hover {
+  background-color: var(--menu-hover-bg);
+}
+
+.menu-item span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-item .icon {
+  flex-shrink: 0;
+  color: var(--menu-icon-color);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-item:hover .icon {
+  color: var(--menu-color);
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: var(--menu-divider-color);
+  margin: 4px 0;
+}
+
+/* Submenu */
+.menu-item-submenu {
+  position: relative;
+}
+
+.submenu-arrow {
+  margin-left: auto;
+  opacity: 0.5;
+  color: var(--menu-icon-color);
+}
+
+.submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  min-width: 180px;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  padding: 4px 0;
+  margin-left: 2px;
+  z-index: 10001;
+  animation: menuFadeIn var(--menu-animation-duration) var(--menu-animation-timing);
+}
+
+.submenu .menu-item {
+  padding: 8px 16px;
+}
+
+/* Danger item */
+.menu-item-danger {
+  color: var(--menu-danger-color);
+}
+
+.menu-item-danger:hover {
+  background-color: var(--menu-danger-hover-bg);
+}
+
+.menu-item-danger .icon {
+  color: var(--menu-danger-color);
+}
+
+/* Disabled state */
+.menu-item:disabled,
+.menu-item.disabled {
+  opacity: var(--menu-disabled-opacity);
+  cursor: not-allowed;
+}
+
+.menu-item:disabled:hover,
+.menu-item.disabled:hover {
+  background-color: transparent;
+}
+
+/* Анимация появления */
+.column-menu {
+  animation: menuFadeIn var(--menu-animation-duration) var(--menu-animation-timing);
+}
+
+@keyframes menuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* patch-011 §3: Checkmark для текущего выравнивания */
+.unified-menu-item-checkmark {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent-primary);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.menu-item-checked {
+  background-color: var(--menu-hover-bg);
+}
+
+/* patch-011: Принудительная светлая тема для всех меню */

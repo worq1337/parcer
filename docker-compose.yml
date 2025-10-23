@@ -1,0 +1,159 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: receipt_parser_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-receipt_parser}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/seed_operators.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - receipt_parser_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API + Telegram Bot
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: receipt_parser_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3001}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-receipt_parser}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET} # patch-017 §8
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-10} # patch-017 §8
+      OCR_SERVICE_URL: ${OCR_SERVICE_URL:-http://ocr:5000} # patch-017 §2: внутри сети сервис слушает 5000
+      USERBOT_SERVICE_URL: ${USERBOT_SERVICE_URL:-http://userbot:5001} # patch-017 §4
+    ports:
+      - "3001:3001"
+    networks:
+      - receipt_parser_network
+    volumes:
+      - backend_backups:/app/backups
+
+  # patch-017 §2: OCR Service (Tesseract + ImageMagick)
+  ocr:
+    build:
+      context: ./services/ocr
+      dockerfile: Dockerfile
+    container_name: receipt_parser_ocr
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Tashkent}
+      TESSERACT_LANG: rus+eng
+      MAX_IMAGE_SIZE_MB: ${MAX_FILE_SIZE_MB:-10}
+      PORT: 5000
+    ports:
+      - "5002:5000"
+    networks:
+      - receipt_parser_network
+    volumes:
+      - ./services/ocr:/app
+      - ocr_temp:/tmp/ocr
+    # Заглушка: сервис будет создан в §2
+    profiles:
+      - ocr
+      - full
+
+  # patch-017 §4: Userbot Service (Telethon)
+  userbot:
+    build:
+      context: ./services/userbot
+      dockerfile: Dockerfile
+    container_name: receipt_parser_userbot
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - postgres
+    environment:
+      TZ: ${TZ:-Asia/Tashkent}
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_MONITOR_IDS: ${TELEGRAM_MONITOR_IDS:-915326936,856264490,7028509569}
+      OUR_BOT_ID: ${OUR_BOT_ID:-8482297276}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:3001}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-receipt_parser}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET}
+    ports:
+      - "5001:5001"
+    networks:
+      - receipt_parser_network
+    volumes:
+      - ./services/userbot:/app
+      - userbot_sessions:/app/sessions
+    # Заглушка: сервис будет создан в §4
+    profiles:
+      - userbot
+      - full
+
+  # patch-017 §2: Worker для обработки OCR задач
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: receipt_parser_worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ocr:
+        condition: service_started
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-receipt_parser}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      OCR_SERVICE_URL: ${OCR_SERVICE_URL:-http://ocr:5000}
+      WORKER_MODE: "true"
+    networks:
+      - receipt_parser_network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    # Запускаем worker.js вместо index.js
+    command: node src/worker.js
+    # Заглушка: worker.js будет создан в §2
+    profiles:
+      - worker
+      - full
+
+networks:
+  receipt_parser_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  backend_backups: # Backend database backups
+  ocr_temp: # patch-017 §2: временные файлы OCR
+  userbot_sessions: # patch-017 §4: session strings Telethon

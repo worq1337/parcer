@@ -1,0 +1,427 @@
+/* tokens.css - patch-016 §3, §10: Единые токены дизайна для светлой и тёмной темы */
+
+:root {
+  /* === Светлая тема (по умолчанию) === */
+
+  /* Основные цвета */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #fafafa;
+  --color-bg-tertiary: #f5f5f5;
+  --color-bg-hover: #f5f5f5;
+  --color-bg-active: #e0e0e0;
+
+  /* Текст */
+  --color-text-primary: #333333;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #999999;
+  --color-text-inverse: #ffffff;
+
+  /* Границы */
+  --color-border-primary: #e0e0e0;
+  --color-border-secondary: #d0d0d0;
+  --color-border-focus: #1976d2;
+
+  /* Акценты */
+  --color-accent-primary: #1976d2;
+  --color-accent-hover: #1565c0;
+  --color-accent-light: #e3f2fd;
+
+  /* Системные состояния */
+  --color-focus-ring: rgba(25, 118, 210, 0.25);
+
+  /* Тени */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
+
+  /* Модальные окна */
+  --modal-bg: #ffffff;
+  --modal-fg: #333333;
+  --modal-border: #e0e0e0;
+  --modal-backdrop: rgba(0, 0, 0, 0.5);
+
+  /* Инпуты и кнопки */
+  --input-bg: #ffffff;
+  --input-border: #d0d0d0;
+  --input-focus: #1976d2;
+  --button-bg: #f5f5f5;
+  --button-hover: #e0e0e0;
+
+  /* Прокрутка */
+  --scrollbar-track: #f1f1f1;
+  --scrollbar-thumb: #c0c0c0;
+  --scrollbar-thumb-hover: #999999;
+
+  /* Клавиши (kbd элементы) */
+  --kbd-bg: linear-gradient(180deg, #ffffff 0%, #f5f5f5 100%);
+  --kbd-border: #d0d0d0;
+  --kbd-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  --kbd-text: #333333;
+
+  /* Загрузочные оверлеи */
+  --loading-overlay-bg: rgba(255, 255, 255, 0.92);
+  --loading-overlay-text: var(--color-text-secondary);
+  --spinner-track: #e0e0e0;
+  --spinner-indicator: var(--color-accent-primary);
+
+  /* Специфичные для приложения */
+  --grid-header-bg: #fafafa;
+  --grid-header-fg: #424242;
+  --grid-row-hover: #f5f5f5;
+  --grid-cell-selected: #e3f2fd;
+  --grid-border: #E5E7EB;
+  --grid-edit-bg: #fff9c4;
+  --grid-edit-border: #fbc02d;
+  --grid-fill-handle-border: var(--color-bg-primary);
+
+  /* Toolbar и Header */
+  --toolbar-bg: #ffffff;
+  --toolbar-border: #e0e0e0;
+  --header-bg: #ffffff;
+  --header-border: #e0e0e0;
+
+  /* Filters Panel */
+  --filters-bg: #ffffff;
+  --filters-header-bg: #fafafa;
+  --filters-border: #e0e0e0;
+
+  /* Settings */
+  --settings-bg: #ffffff;
+  --settings-section-border: #e0e0e0;
+  --settings-danger-bg: #fff5f5;
+  --settings-danger-border: #ffcdd2;
+
+  /* Admin */
+  --admin-bg: #ffffff;
+  --admin-tab-bg: #f5f5f5;
+  --admin-tab-active: #1976d2;
+
+  /* Status indicators */
+  --status-success: #4caf50;
+  --status-error: #f44336;
+  --status-warning: #ff9800;
+  --status-info: #2196f3;
+  --status-success-bg: #e8f5e9;
+  --status-error-bg: #ffebee;
+  --status-warning-bg: #fff3e0;
+  --status-info-bg: #e3f2fd;
+
+  /* Chips */
+  --chip-bg: #e3f2fd;
+  --chip-fg: #1976d2;
+  --chip-close-hover: #bbdefb;
+  --badge-success-bg: #e8f5e9;
+  --badge-success-text: #2e7d32;
+  --badge-muted-bg: #f5f5f5;
+  --badge-muted-text: #999999;
+
+  /* Dropdowns и Select */
+  --select-bg: #ffffff;
+  --select-fg: #333333;
+  --select-border: #d0d0d0;
+  --select-hover-bg: #f5f5f5;
+  --select-option-bg: #ffffff;
+  --select-option-hover: #f5f5f5;
+  --select-option-selected: #e3f2fd;
+
+  /* Textarea */
+  --textarea-bg: #ffffff;
+  --textarea-fg: #333333;
+  --textarea-border: #d0d0d0;
+  --textarea-placeholder: #999999;
+
+  /* Tables и Lists */
+  --table-header-bg: #fafafa;
+  --table-header-fg: #424242;
+  --table-row-bg: #ffffff;
+  --table-row-alt-bg: #fafafa;
+  --table-row-hover: #f5f5f5;
+  --table-border: #e5e7eb;
+
+  /* Operators Manager specific */
+  --operators-card-bg: #ffffff;
+  --operators-card-border: #e0e0e0;
+  --operators-header-bg: #f5f5f5;
+}
+
+/* === Тёмная тема === */
+[data-theme="dark"] {
+  /* Основные цвета */
+  --color-bg-primary: #1e1e1e;
+  --color-bg-secondary: #242424;
+  --color-bg-tertiary: #2c2c2c;
+  --color-bg-hover: #3a3a3a;
+  --color-bg-active: #444444;
+
+  /* Текст */
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #b0b0b0;
+  --color-text-tertiary: #808080;
+  --color-text-inverse: #1e1e1e;
+
+  /* Границы */
+  --color-border-primary: #444444;
+  --color-border-secondary: #555555;
+  --color-border-focus: #4a9eff;
+
+  /* Акценты */
+  --color-accent-primary: #4a9eff;
+  --color-accent-hover: #6bb1ff;
+  --color-accent-light: #1a3a5a;
+  --color-focus-ring: rgba(74, 158, 255, 0.35);
+
+  /* Тени */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+
+  /* Модальные окна */
+  --modal-bg: #2c2c2c;
+  --modal-fg: #e0e0e0;
+  --modal-border: #444444;
+  --modal-backdrop: rgba(0, 0, 0, 0.7);
+
+  /* Инпуты и кнопки */
+  --input-bg: #2c2c2c;
+  --input-border: #555555;
+  --input-focus: #4a9eff;
+  --button-bg: #3a3a3a;
+  --button-hover: #444444;
+
+  /* Клавиши (kbd элементы) */
+  --kbd-bg: linear-gradient(180deg, #3a3a3a 0%, #2c2c2c 100%);
+  --kbd-border: #555555;
+  --kbd-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  --kbd-text: #e0e0e0;
+
+  /* Специфичные для приложения */
+  --grid-header-bg: #242424;
+  --grid-header-fg: #e0e0e0;
+  --grid-row-hover: #3a3a3a;
+  --grid-cell-selected: #1a3a5a;
+  --grid-border: #444444;
+  --grid-edit-bg: #3b2e10;
+  --grid-edit-border: #d1a31a;
+  --grid-fill-handle-border: var(--color-bg-primary);
+  --grid-edit-bg: #3b2e10;
+  --grid-edit-border: #d1a31a;
+
+  /* Toolbar и Header */
+  --toolbar-bg: #1e1e1e;
+  --toolbar-border: #444444;
+  --header-bg: #1e1e1e;
+  --header-border: #444444;
+
+  /* Filters Panel */
+  --filters-bg: #1e1e1e;
+  --filters-header-bg: #242424;
+  --filters-border: #444444;
+
+  /* Settings */
+  --settings-bg: #1e1e1e;
+  --settings-section-border: #444444;
+  --settings-danger-bg: #3a2020;
+  --settings-danger-border: #664444;
+
+  /* Admin */
+  --admin-bg: #1e1e1e;
+  --admin-tab-bg: #2c2c2c;
+  --admin-tab-active: #4a9eff;
+
+  /* Status indicators */
+  --status-success: #66bb6a;
+  --status-error: #ef5350;
+  --status-warning: #ffa726;
+  --status-info: #42a5f5;
+  --status-success-bg: rgba(102, 187, 106, 0.2);
+  --status-error-bg: rgba(239, 83, 80, 0.2);
+  --status-warning-bg: rgba(255, 167, 38, 0.22);
+  --status-info-bg: rgba(66, 165, 245, 0.2);
+
+  /* Chips */
+  --chip-bg: #1a3a5a;
+  --chip-fg: #4a9eff;
+  --chip-close-hover: #2a4a6a;
+  --badge-success-bg: rgba(76, 175, 80, 0.2);
+  --badge-success-text: #a5f2ab;
+  --badge-muted-bg: #2c2c2c;
+  --badge-muted-text: #b0b0b0;
+
+  /* Dropdowns и Select */
+  --select-bg: #2c2c2c;
+  --select-fg: #e0e0e0;
+  --select-border: #555555;
+  --select-hover-bg: #3a3a3a;
+  --select-option-bg: #2c2c2c;
+  --select-option-hover: #3a3a3a;
+  --select-option-selected: #1a3a5a;
+
+  /* Textarea */
+  --textarea-bg: #2c2c2c;
+  --textarea-fg: #e0e0e0;
+  --textarea-border: #555555;
+  --textarea-placeholder: #808080;
+
+  /* Tables и Lists */
+  --table-header-bg: #242424;
+  --table-header-fg: #e0e0e0;
+  --table-row-bg: #1e1e1e;
+  --table-row-alt-bg: #242424;
+  --table-row-hover: #3a3a3a;
+  --table-border: #444444;
+
+  /* Operators Manager specific */
+  --operators-card-bg: #2c2c2c;
+  --operators-card-border: #444444;
+  --operators-header-bg: #242424;
+  --scrollbar-track: #1f1f1f;
+  --scrollbar-thumb: #4a4a4a;
+  --scrollbar-thumb-hover: #5f5f5f;
+  --loading-overlay-bg: rgba(18, 18, 18, 0.88);
+  --loading-overlay-text: var(--color-text-secondary);
+  --spinner-track: #3a3a3a;
+  --spinner-indicator: var(--color-accent-primary);
+}
+
+/* Также поддерживаем system preference без явной установки темы */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Основные цвета */
+    --color-bg-primary: #1e1e1e;
+    --color-bg-secondary: #242424;
+    --color-bg-tertiary: #2c2c2c;
+    --color-bg-hover: #3a3a3a;
+    --color-bg-active: #444444;
+
+    /* Текст */
+    --color-text-primary: #e0e0e0;
+    --color-text-secondary: #b0b0b0;
+    --color-text-tertiary: #808080;
+    --color-text-inverse: #1e1e1e;
+
+    /* Границы */
+    --color-border-primary: #444444;
+    --color-border-secondary: #555555;
+    --color-border-focus: #4a9eff;
+
+    /* Акценты */
+    --color-accent-primary: #4a9eff;
+    --color-accent-hover: #6bb1ff;
+    --color-accent-light: #1a3a5a;
+    --color-focus-ring: rgba(74, 158, 255, 0.35);
+
+    /* Тени */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+
+    /* Модальные окна */
+    --modal-bg: #2c2c2c;
+    --modal-fg: #e0e0e0;
+    --modal-border: #444444;
+    --modal-backdrop: rgba(0, 0, 0, 0.7);
+
+    /* Инпуты и кнопки */
+    --input-bg: #2c2c2c;
+    --input-border: #555555;
+    --input-focus: #4a9eff;
+    --button-bg: #3a3a3a;
+    --button-hover: #444444;
+
+    /* Прокрутка */
+    --scrollbar-track: #1f1f1f;
+    --scrollbar-thumb: #4a4a4a;
+    --scrollbar-thumb-hover: #5f5f5f;
+
+    /* Клавиши (kbd элементы) */
+    --kbd-bg: linear-gradient(180deg, #3a3a3a 0%, #2c2c2c 100%);
+    --kbd-border: #555555;
+    --kbd-shadow: 0 2px 0 #555555;
+    --kbd-text: #e0e0e0;
+
+    /* Загрузочные оверлеи */
+    --loading-overlay-bg: rgba(18, 18, 18, 0.88);
+    --loading-overlay-text: var(--color-text-secondary);
+    --spinner-track: #3a3a3a;
+    --spinner-indicator: var(--color-accent-primary);
+
+    /* Специфичные для приложения */
+    --grid-header-bg: #242424;
+    --grid-header-fg: #e0e0e0;
+    --grid-row-hover: #3a3a3a;
+    --grid-cell-selected: #1a3a5a;
+    --grid-border: #444444;
+    --grid-edit-bg: #3b2e10;
+    --grid-edit-border: #d1a31a;
+    --grid-fill-handle-border: var(--color-bg-primary);
+
+    /* Toolbar и Header */
+    --toolbar-bg: #1e1e1e;
+    --toolbar-border: #444444;
+    --header-bg: #1e1e1e;
+    --header-border: #444444;
+
+    /* Filters Panel */
+    --filters-bg: #1e1e1e;
+    --filters-header-bg: #242424;
+    --filters-border: #444444;
+
+    /* Settings */
+    --settings-bg: #1e1e1e;
+    --settings-section-border: #444444;
+    --settings-danger-bg: #3a2020;
+    --settings-danger-border: #664444;
+
+    /* Admin */
+    --admin-bg: #1e1e1e;
+    --admin-tab-bg: #2c2c2c;
+    --admin-tab-active: #4a9eff;
+
+    /* Status indicators */
+    --status-success: #66bb6a;
+    --status-error: #ef5350;
+    --status-warning: #ffa726;
+    --status-info: #42a5f5;
+    --status-success-bg: rgba(102, 187, 106, 0.2);
+    --status-error-bg: rgba(239, 83, 80, 0.2);
+    --status-warning-bg: rgba(255, 167, 38, 0.22);
+    --status-info-bg: rgba(66, 165, 245, 0.2);
+
+    /* Chips */
+    --chip-bg: #1a3a5a;
+    --chip-fg: #4a9eff;
+    --chip-close-hover: #2a4a6a;
+    --badge-success-bg: rgba(76, 175, 80, 0.2);
+    --badge-success-text: #a5f2ab;
+    --badge-muted-bg: #2c2c2c;
+    --badge-muted-text: #b0b0b0;
+
+    /* Dropdowns и Select */
+    --select-bg: #2c2c2c;
+    --select-fg: #e0e0e0;
+    --select-border: #555555;
+    --select-hover-bg: #3a3a3a;
+    --select-option-bg: #2c2c2c;
+    --select-option-hover: #3a3a3a;
+    --select-option-selected: #1a3a5a;
+
+    /* Textarea */
+    --textarea-bg: #2c2c2c;
+    --textarea-fg: #e0e0e0;
+    --textarea-border: #555555;
+    --textarea-placeholder: #808080;
+
+    /* Tables и Lists */
+    --table-header-bg: #242424;
+    --table-header-fg: #e0e0e0;
+    --table-row-bg: #1e1e1e;
+    --table-row-alt-bg: #242424;
+    --table-row-hover: #3a3a3a;
+    --table-border: #444444;
+
+    /* Operators Manager specific */
+    --operators-card-bg: #2c2c2c;
+    --operators-card-border: #444444;
+    --operators-header-bg: #242424;
+  }
+}

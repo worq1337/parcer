@@ -1,0 +1,90 @@
+.checks-table-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-primary);
+  background-color: var(--color-bg-secondary);
+}
+
+.table-info {
+  display: flex;
+  gap: 20px;
+}
+
+.info-text {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.info-text strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.table-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.toolbar-button {
+  padding: 8px 16px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background-color: var(--button-bg);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-button:hover {
+  background-color: var(--button-hover);
+  border-color: var(--color-border-secondary);
+}
+
+/* AG Grid customization */
+.ag-theme-alpine {
+  --ag-header-background-color: var(--table-header-bg);
+  --ag-header-foreground-color: var(--table-header-fg);
+  --ag-border-color: var(--table-border);
+  --ag-row-hover-color: var(--table-row-hover);
+  --ag-selected-row-background-color: var(--grid-cell-selected);
+}
+
+.ag-theme-alpine .ag-header-cell-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ag-theme-alpine .ag-cell {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.ag-theme-alpine .ag-row {
+  border-bottom: 1px solid var(--table-border);
+}
+
+.ag-theme-alpine .ag-row-hover {
+  background-color: var(--table-row-hover) !important;
+}
+
+/* Custom cell styles */
+.ag-cell.amount-cell {
+  font-weight: 600;
+}

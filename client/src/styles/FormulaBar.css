@@ -1,0 +1,113 @@
+/* Строка формул - patch.md §5.2 */
+/* patch-016-fix: Переведено на CSS-токены для поддержки тёмной темы */
+
+.formula-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 36px;
+  background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border-primary);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.formula-bar-cell-ref {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  height: 100%;
+  padding: 0 12px;
+  background: var(--color-bg-tertiary);
+  border-right: 1px solid var(--color-border-primary);
+}
+
+.cell-reference {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.formula-bar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border-primary);
+}
+
+.formula-bar-input-container {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+  padding: 0 12px;
+  gap: 8px;
+}
+
+.formula-icon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.formula-input {
+  flex: 1;
+  height: 100%;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.formula-input::placeholder {
+  color: var(--color-text-tertiary);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.formula-input:focus {
+  background: var(--color-bg-secondary);
+}
+
+.formula-input:disabled {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+
+.formula-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 100%;
+  border-left: 1px solid var(--color-border-primary);
+}
+
+.formula-action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: background 0.15s ease;
+}
+
+.formula-action-button:hover {
+  background: var(--color-bg-hover);
+}
+
+.formula-action-button:active {
+  transform: scale(0.95);
+}
+
+/* Подсветка формул */
+.formula-input[value^="="] {
+  color: var(--color-accent-primary);
+  font-weight: 500;
+}

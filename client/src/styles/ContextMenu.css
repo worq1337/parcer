@@ -1,0 +1,121 @@
+/* patch-011 §2: Контекстное меню - унифицированный стиль */
+
+/* Переопределение стилей AG Grid для контекстного меню */
+.ag-theme-alpine .ag-menu,
+.ag-theme-alpine-dark .ag-menu {
+  background: var(--menu-bg) !important;
+  border: 1px solid var(--menu-border) !important;
+  border-radius: var(--menu-radius) !important;
+  box-shadow: var(--menu-shadow) !important;
+  color: var(--menu-color) !important;
+  font-size: 14px !important;
+  padding: 4px 0 !important;
+  font-variant-numeric: tabular-nums;
+  animation: menuFadeIn var(--menu-animation-duration) var(--menu-animation-timing);
+}
+
+/* Пункты меню */
+.ag-theme-alpine .ag-menu-option,
+.ag-theme-alpine-dark .ag-menu-option {
+  padding: var(--menu-padding-vertical) var(--menu-padding-horizontal) !important;
+  color: var(--menu-color) !important;
+  line-height: var(--menu-line-height) !important;
+  transition: background-color var(--menu-animation-duration) var(--menu-animation-timing) !important;
+}
+
+.ag-theme-alpine .ag-menu-option:hover,
+.ag-theme-alpine-dark .ag-menu-option:hover,
+.ag-theme-alpine .ag-menu-option-active,
+.ag-theme-alpine-dark .ag-menu-option-active {
+  background-color: var(--menu-hover-bg) !important;
+}
+
+/* Текст пункта меню */
+.ag-theme-alpine .ag-menu-option-text,
+.ag-theme-alpine-dark .ag-menu-option-text {
+  color: var(--menu-color) !important;
+}
+
+/* Иконки в меню */
+.ag-theme-alpine .ag-menu-option-icon,
+.ag-theme-alpine-dark .ag-menu-option-icon {
+  color: var(--menu-icon-color) !important;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ag-theme-alpine .ag-menu-option:hover .ag-menu-option-icon,
+.ag-theme-alpine-dark .ag-menu-option:hover .ag-menu-option-icon {
+  color: var(--menu-color) !important;
+}
+
+/* Shortcut hint */
+.ag-theme-alpine .ag-menu-option-shortcut,
+.ag-theme-alpine-dark .ag-menu-option-shortcut {
+  margin-left: auto;
+  padding-left: 20px;
+  font-size: 11px;
+  color: var(--menu-icon-color);
+  opacity: 0.7;
+}
+
+/* Разделители */
+.ag-theme-alpine .ag-menu-separator,
+.ag-theme-alpine-dark .ag-menu-separator {
+  height: 1px !important;
+  background-color: var(--menu-divider-color) !important;
+  margin: 4px 0 !important;
+}
+
+/* Субменю */
+.ag-theme-alpine .ag-menu-option-popup-pointer,
+.ag-theme-alpine-dark .ag-menu-option-popup-pointer {
+  color: var(--menu-icon-color) !important;
+  opacity: 0.5;
+}
+
+/* Disabled пункты */
+.ag-theme-alpine .ag-menu-option-disabled,
+.ag-theme-alpine-dark .ag-menu-option-disabled {
+  opacity: var(--menu-disabled-opacity) !important;
+  cursor: not-allowed !important;
+}
+
+.ag-theme-alpine .ag-menu-option-disabled:hover,
+.ag-theme-alpine-dark .ag-menu-option-disabled:hover {
+  background-color: transparent !important;
+}
+
+/* Анимация появления */
+@keyframes menuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Переопределение темной темы - принудительная светлая тема */
+.ag-theme-alpine-dark .ag-menu,
+.ag-theme-alpine-dark .ag-menu-option,
+.ag-theme-alpine-dark .ag-menu-option-text {
+  background: var(--menu-bg) !important;
+  color: var(--menu-color) !important;
+}
+
+/* Context menu icon */
+.context-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  color: var(--menu-icon-color);
+}

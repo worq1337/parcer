@@ -1,0 +1,8 @@
+name = "receipt-parser-updates"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "."
+
+# R2 bucket binding для Pages Functions
+[[r2_buckets]]
+binding = "RECEIPT_PARSER_UPDATES"
+bucket_name = "receipt-parser-updates"

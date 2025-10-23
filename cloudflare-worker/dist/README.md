@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "receipt-parser-updates-proxy" generated at 2025-10-23T15:01:05.132Z.

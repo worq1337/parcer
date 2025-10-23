@@ -1,0 +1,11 @@
+name = "receipt-parser-updates-proxy"
+main = "r2-proxy.js"
+compatibility_date = "2024-01-01"
+
+# Включаем workers.dev
+workers_dev = true
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "RECEIPT_PARSER_UPDATES"
+bucket_name = "receipt-parser-updates"

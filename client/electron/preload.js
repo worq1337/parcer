@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Platform info
   platform: process.platform,
 
+  // patch-021: App version (hardcoded to avoid asar issues)
+  appVersion: '1.0.4',
+
   // patch-017 §5: Notifications API
   notifications: {
     // Show OS notification

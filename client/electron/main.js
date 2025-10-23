@@ -26,6 +26,7 @@ function createWindow() {
     height: 900,
     minWidth: 1200,
     minHeight: 700,
+    show: false, // Не показываем окно пока не загрузится контент
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -43,6 +44,11 @@ function createWindow() {
     : `file://${path.join(__dirname, '../build/index.html')}`;
 
   mainWindow.loadURL(startURL);
+
+  // Показываем окно когда контент загрузился
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
 
   if (isDev) {
     mainWindow.webContents.openDevTools();

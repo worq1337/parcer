@@ -68,6 +68,21 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Проверка совместимости версии клиента
+app.get('/api/compat', (req, res) => {
+  const clientVersion = req.query.version;
+  const minSupportedVersion = '1.0.5';
+
+  res.json({
+    success: true,
+    compatible: true,
+    clientVersion,
+    serverVersion: '1.0.5',
+    minSupportedVersion,
+    message: 'Версия клиента совместима с сервером'
+  });
+});
+
 // Обработка 404
 app.use((req, res) => {
   res.status(404).json({

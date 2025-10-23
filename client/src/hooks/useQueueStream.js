@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Hook для подключения к SSE stream событий очереди
  * patch-016 §7: Real-time мониторинг очереди обработки чеков
+ * patch-024: Исправлена проблема с бесконечным ре-рендером
  *
  * @param {boolean} enabled - Включить/выключить подключение
  * @param {function} onEvent - Callback для обработки событий
@@ -14,12 +15,33 @@ export const useQueueStream = (enabled = false, onEvent) => {
   const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
+  const onEventRef = useRef(onEvent);
+
+  // Обновляем ref при изменении callback
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
   const maxReconnectAttempts = 5;
   const baseReconnectDelay = 2000; // 2 секунды
 
-  const cleanup = useCallback(() => {
+  useEffect(() => {
+    if (!enabled) {
+      // Очистка при выключении
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      setConnected(false);
+      return;
+    }
+
+    // Закрываем предыдущее подключение если есть
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
@@ -28,95 +50,102 @@ export const useQueueStream = (enabled = false, onEvent) => {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    setConnected(false);
-  }, []);
 
-  const connect = useCallback(() => {
-    if (!enabled) {
-      cleanup();
-      return;
-    }
+    const connect = () => {
+      try {
+        const streamUrl = `${apiUrl}/admin/queue/stream`;
+        console.log('[SSE] Connecting to:', streamUrl);
 
-    // Закрываем предыдущее подключение если есть
-    cleanup();
+        const eventSource = new EventSource(streamUrl);
+        eventSourceRef.current = eventSource;
 
-    try {
-      const streamUrl = `${apiUrl}/admin/queue/stream`;
-      console.log('[SSE] Connecting to:', streamUrl);
+        eventSource.onopen = () => {
+          console.log('[SSE] Connected successfully');
+          setConnected(true);
+          setError(null);
+          reconnectAttemptsRef.current = 0;
+        };
 
-      const eventSource = new EventSource(streamUrl);
-      eventSourceRef.current = eventSource;
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('[SSE] Event received:', data);
 
-      eventSource.onopen = () => {
-        console.log('[SSE] Connected successfully');
-        setConnected(true);
-        setError(null);
-        reconnectAttemptsRef.current = 0;
-      };
+            if (data.type === 'connected') {
+              // Начальное подключение
+              return;
+            }
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('[SSE] Event received:', data);
+            // Вызываем callback с данными события
+            if (onEventRef.current) {
+              onEventRef.current(data);
+            }
+          } catch (parseError) {
+            console.error('[SSE] Error parsing event data:', parseError);
+          }
+        };
 
-          if (data.type === 'connected') {
-            // Начальное подключение
-            return;
+        eventSource.onerror = (err) => {
+          console.error('[SSE] Connection error:', err);
+          setConnected(false);
+          setError('Connection lost');
+
+          // Закрываем подключение
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
           }
 
-          // Вызываем callback с данными события
-          if (onEvent) {
-            onEvent(data);
-          }
-        } catch (parseError) {
-          console.error('[SSE] Error parsing event data:', parseError);
-        }
-      };
+          // Автореконнект с экспоненциальной задержкой
+          if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+            const delay = baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current);
+            console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
 
-      eventSource.onerror = (err) => {
-        console.error('[SSE] Connection error:', err);
+            reconnectTimeoutRef.current = setTimeout(() => {
+              reconnectAttemptsRef.current += 1;
+              connect();
+            }, delay);
+          } else {
+            setError(`Failed to connect after ${maxReconnectAttempts} attempts`);
+          }
+        };
+      } catch (err) {
+        console.error('[SSE] Failed to create EventSource:', err);
+        setError(err.message);
         setConnected(false);
-        setError('Connection lost');
+      }
+    };
 
-        // Автореконнект с экспоненциальной задержкой
-        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-          const delay = baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current);
-          console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
+    // Начинаем подключение
+    connect();
 
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectAttemptsRef.current += 1;
-            connect();
-          }, delay);
-        } else {
-          setError(`Failed to connect after ${maxReconnectAttempts} attempts`);
-          cleanup();
-        }
-      };
-    } catch (err) {
-      console.error('[SSE] Failed to create EventSource:', err);
-      setError(err.message);
-      setConnected(false);
-    }
-  }, [enabled, apiUrl, onEvent, cleanup]);
+    // Очистка при размонтировании
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+  }, [enabled, apiUrl]); // Только enabled и apiUrl в зависимостях
 
   // Ручной реконнект
-  const reconnect = useCallback(() => {
+  const reconnect = () => {
     console.log('[SSE] Manual reconnect triggered');
     reconnectAttemptsRef.current = 0;
     setError(null);
-    connect();
-  }, [connect]);
 
-  // Подключение при включении
-  useEffect(() => {
-    if (enabled) {
-      connect();
+    // Перезапускаем подключение
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
-
-    return () => {
-      cleanup();
-    };
-  }, [enabled, connect, cleanup]);
+    // Переключаем enabled чтобы перезапустить useEffect
+    setConnected(false);
+  };
 
   return {
     connected,

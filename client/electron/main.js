@@ -105,6 +105,30 @@ function createWindow() {
       label: 'Справка',
       submenu: [
         {
+          label: 'Проверить обновления',
+          click: () => {
+            if (!app.isPackaged) {
+              const { dialog } = require('electron');
+              dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Обновления',
+                message: 'Проверка обновлений недоступна в режиме разработки',
+                detail: 'Обновления работают только в собранной версии приложения.'
+              });
+              return;
+            }
+            autoUpdater.checkForUpdates();
+            const { dialog } = require('electron');
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'Проверка обновлений',
+              message: 'Проверяем наличие обновлений...',
+              detail: 'Вы получите уведомление, если доступна новая версия.'
+            });
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'О программе',
           click: () => {
             const { dialog } = require('electron');
@@ -112,7 +136,7 @@ function createWindow() {
               type: 'info',
               title: 'О программе',
               message: 'Парсер банковских чеков',
-              detail: 'Версия 1.0.0\n\nСистема автоматического парсинга банковских транзакций из SMS и Telegram-уведомлений узбекских банков.'
+              detail: 'Версия 1.0.3\n\nСистема автоматического парсинга банковских транзакций из SMS и Telegram-уведомлений узбекских банков.'
             });
           }
         }

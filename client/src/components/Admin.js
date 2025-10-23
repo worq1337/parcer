@@ -36,6 +36,17 @@ const Admin = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [realtimeEnabled, setRealtimeEnabled] = useState(false); // patch-016 §7: Переключатель real-time
 
+  // patch-023: Update checker state
+  const [updateStatus, setUpdateStatus] = useState({
+    checking: false,
+    available: false,
+    downloading: false,
+    downloaded: false,
+    error: null,
+    info: null,
+    progress: null
+  });
+
   // patch-010 §5: Троттлер для тостов
   const showToastThrottled = useRef(createToastThrottler()).current;
 
@@ -82,6 +93,93 @@ const Admin = ({ onClose }) => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
+
+  // patch-023: Subscribe to update events
+  useEffect(() => {
+    if (!window.electron || !window.electron.updates) return;
+
+    const {updates} = window.electron;
+
+    updates.onUpdateStatus((status) => {
+      setUpdateStatus(prev => ({ ...prev, checking: status.type === 'checking' }));
+    });
+
+    updates.onUpdateAvailable((info) => {
+      setUpdateStatus(prev => ({
+        ...prev,
+        checking: false,
+        available: true,
+        info,
+        error: null
+      }));
+      toast.info(`Доступна новая версия: ${info.version}`);
+    });
+
+    updates.onUpdateNotAvailable(() => {
+      setUpdateStatus(prev => ({
+        ...prev,
+        checking: false,
+        available: false,
+        error: null
+      }));
+      toast.success('У вас установлена последняя версия');
+    });
+
+    updates.onUpdateError((error) => {
+      setUpdateStatus(prev => ({
+        ...prev,
+        checking: false,
+        downloading: false,
+        error: error.message
+      }));
+      toast.error(`Ошибка обновления: ${error.message}`);
+    });
+
+    updates.onDownloadProgress((progress) => {
+      setUpdateStatus(prev => ({
+        ...prev,
+        progress
+      }));
+    });
+
+    updates.onUpdateDownloaded((info) => {
+      setUpdateStatus(prev => ({
+        ...prev,
+        downloading: false,
+        downloaded: true,
+        info
+      }));
+      toast.success('Обновление загружено! Перезапустите приложение для установки.');
+    });
+
+    return () => {
+      if (updates.removeAllListeners) {
+        updates.removeAllListeners();
+      }
+    };
+  }, []);
+
+  // patch-023: Update handlers
+  const handleCheckForUpdates = () => {
+    if (!window.electron || !window.electron.updates) {
+      toast.warning('Проверка обновлений доступна только в Electron');
+      return;
+    }
+    setUpdateStatus(prev => ({ ...prev, checking: true, error: null }));
+    window.electron.updates.check();
+  };
+
+  const handleDownloadUpdate = () => {
+    if (!window.electron || !window.electron.updates) return;
+    setUpdateStatus(prev => ({ ...prev, downloading: true }));
+    window.electron.updates.download();
+    toast.info('Начинается загрузка обновления...');
+  };
+
+  const handleInstallUpdate = () => {
+    if (!window.electron || !window.electron.updates) return;
+    window.electron.updates.install();
+  };
 
   // Фильтры для очереди (patch-009)
   const [queueFilters, setQueueFilters] = useState({
@@ -436,6 +534,64 @@ const Admin = ({ onClose }) => {
                   <div className="system-stat">
                     <span className="stat-label">Квота:</span>
                     <span>{systemStatus.parser.quota}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* patch-023: Обновления приложения */}
+              <div className="system-card">
+                <div className="system-card-header">
+                  <Icon name="refresh" size={20} />
+                  <h3>Обновления</h3>
+                </div>
+                <div className="system-card-body">
+                  <div className="system-stat">
+                    <span className="stat-label">Версия:</span>
+                    <span>{window.electron?.appVersion || '1.0.2'}</span>
+                  </div>
+                  <div className="system-stat">
+                    <span className="stat-label">Статус:</span>
+                    {updateStatus.checking && <span className="stat-info">Проверка...</span>}
+                    {updateStatus.downloading && <span className="stat-info">Загрузка... {updateStatus.progress ? `${Math.round(updateStatus.progress.percent)}%` : ''}</span>}
+                    {updateStatus.downloaded && <span className="stat-success">Готово к установке</span>}
+                    {updateStatus.available && !updateStatus.downloading && !updateStatus.downloaded && (
+                      <span className="stat-warning">Доступна v{updateStatus.info?.version}</span>
+                    )}
+                    {!updateStatus.checking && !updateStatus.available && !updateStatus.downloading && !updateStatus.downloaded && (
+                      <span className="stat-success">Актуальная версия</span>
+                    )}
+                    {updateStatus.error && <span className="stat-error">{updateStatus.error}</span>}
+                  </div>
+                  <div className="system-stat">
+                    <div className="update-actions" style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button
+                        className="btn-sm btn-primary"
+                        onClick={handleCheckForUpdates}
+                        disabled={updateStatus.checking || updateStatus.downloading}
+                        style={{ fontSize: '12px', padding: '4px 8px' }}
+                      >
+                        {updateStatus.checking ? 'Проверка...' : 'Проверить'}
+                      </button>
+                      {updateStatus.available && !updateStatus.downloaded && (
+                        <button
+                          className="btn-sm btn-success"
+                          onClick={handleDownloadUpdate}
+                          disabled={updateStatus.downloading}
+                          style={{ fontSize: '12px', padding: '4px 8px' }}
+                        >
+                          {updateStatus.downloading ? 'Загрузка...' : 'Скачать'}
+                        </button>
+                      )}
+                      {updateStatus.downloaded && (
+                        <button
+                          className="btn-sm btn-warning"
+                          onClick={handleInstallUpdate}
+                          style={{ fontSize: '12px', padding: '4px 8px' }}
+                        >
+                          Установить и перезапустить
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

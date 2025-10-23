@@ -78,9 +78,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "asintiko",
-      "repo": "receipt-parser",
-      "releaseType": "release"
+      "owner": "worq1337",
+      "repo": "parcer"
     },
     "mac": {
       "category": "public.app-category.finance",

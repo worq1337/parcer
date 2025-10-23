@@ -13,6 +13,13 @@ autoUpdater.autoInstallOnAppQuit = true; // Автоматическая уст�
 autoUpdater.logger = require('electron-log');
 autoUpdater.logger.transports.file.level = 'info';
 
+// patch-021: Настройка источника обновлений (GitHub Releases)
+autoUpdater.setFeedURL({
+  provider: 'github',
+  owner: 'worq1337',
+  repo: 'parcer',
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,

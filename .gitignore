@@ -65,3 +65,6 @@ __pycache__/
 
 # Electron builder cache
 .electron-builder/
+
+# Git backup folder
+.git-backup/

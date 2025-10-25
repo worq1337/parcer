@@ -241,6 +241,18 @@ autoUpdater.on('update-not-available', (info) => {
 
 // Ошибка при проверке
 autoUpdater.on('error', (err) => {
+  // Игнорируем ошибки 404 (нет файлов обновлений в релизе)
+  const is404Error = err.message && (
+    err.message.includes('404') ||
+    err.message.includes('Cannot find latest.yml') ||
+    err.message.includes('HttpError: 404')
+  );
+
+  if (is404Error) {
+    console.log('Update files not found in latest release (expected for Android-only releases)');
+    return;
+  }
+
   console.error('Update error:', err);
   if (mainWindow) {
     mainWindow.webContents.send('update-error', { message: err.message });

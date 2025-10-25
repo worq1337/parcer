@@ -163,9 +163,10 @@ class UserbotManager:
         self.is_running = True
 
         me = await self.client.get_me()
+        bot_names = ', '.join([config.BOT_NAMES.get(bot_id, str(bot_id)) for bot_id in config.MONITOR_BOT_IDS])
 
         print(f"🤖 Userbot запущен: {me.first_name} (@{me.username})")
-        print(f"📡 Мониторим ботов: {config.MONITOR_BOT_IDS}")
+        print(f"📡 Мониторим боты: {bot_names}")
         print(f"🎯 Пересылаем в бот: {config.OUR_BOT_ID}")
 
         return {

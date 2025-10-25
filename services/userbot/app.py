@@ -245,18 +245,27 @@ if __name__ == '__main__':
 
     # Пытаемся автоматически запустить userbot если уже авторизован
     try:
+        print("🔍 Проверка авторизации для автозапуска...")
         status = run_async(userbot_manager.get_status())
+        print(f"📊 Статус: {status}")
+
         if status.get('authorized'):
-            print("✅ Userbot уже авторизован, запускаем...")
+            print("✅ Userbot уже авторизован, запускаем мониторинг...")
             run_async(userbot_manager.start())
 
             # Запускаем в фоновом режиме
+            print("🚀 Запуск run_until_disconnected в фоне...")
             asyncio.run_coroutine_threadsafe(
                 userbot_manager.run_until_disconnected(),
                 loop
             )
+            print("✅ Userbot запущен и мониторит каналы!")
+        else:
+            print("⚠️ Userbot не авторизован. Требуется вызвать POST /login и POST /start")
     except Exception as e:
-        print(f"⚠️ Автозапуск не удался: {e}")
+        import traceback
+        print(f"❌ Автозапуск не удался: {e}")
+        print(f"🔍 Traceback:\n{traceback.format_exc()}")
 
     # Запускаем Flask
     app.run(

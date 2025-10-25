@@ -38,44 +38,71 @@ class ParserService {
 
   /**
    * Парсинг чека с использованием ChatGPT
+   * @param {string|object} input - Текст сообщения или объект с imageUrl
+   * @param {object} options - Дополнительные опции
    */
-  async parseReceipt(text, options = {}) {
+  async parseReceipt(input, options = {}) {
     try {
+      // Определяем тип входных данных
+      const isImageInput = typeof input === 'object' && input.imageUrl;
+      const text = isImageInput ? (input.text || '') : input;
+
       const source = detectSource({
         explicit: options.explicit,
         tgMeta: options.tgMeta,
         text,
       });
 
-      const uzumOperations = this.tryParseUzumBankSms(text);
-      if (uzumOperations.length > 0) {
-        const resolvedSource = source || 'SMS';
-        const operations = uzumOperations.map((operation) => ({
-          ...operation,
-          source: operation.source || resolvedSource,
-        }));
+      // Для текстовых SMS пробуем быстрый парсинг Uzum Bank
+      if (!isImageInput) {
+        const uzumOperations = this.tryParseUzumBankSms(text);
+        if (uzumOperations.length > 0) {
+          const resolvedSource = source || 'SMS';
+          const operations = uzumOperations.map((operation) => ({
+            ...operation,
+            source: operation.source || resolvedSource,
+          }));
 
-        return {
-          success: true,
-          data: operations,
-          source: resolvedSource,
-        };
+          return {
+            success: true,
+            data: operations,
+            source: resolvedSource,
+          };
+        }
       }
+
+      // Выбираем модель в зависимости от типа данных
+      const model = isImageInput ? 'gpt-4o' : 'gpt-4o-mini';
 
       const prompt = this.buildPrompt(text, source);
 
-      const completion = await this.createCompletion([
+      // Формируем сообщения для GPT
+      const messages = [
         {
           role: 'system',
           content: `Ты - эксперт по парсингу банковских уведомлений узбекских банков.
-Твоя задача - извлечь структурированные данные из текста транзакции.
+Твоя задача - извлечь структурированные данные из ${isImageInput ? 'изображения чека или' : ''} текста транзакции.
 Отвечай ТОЛЬКО валидным JSON без дополнительных комментариев.`
         },
         {
           role: 'user',
-          content: prompt
+          content: isImageInput ? [
+            {
+              type: 'text',
+              text: prompt
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: input.imageUrl,
+                detail: 'high' // Высокое качество для лучшего распознавания
+              }
+            }
+          ] : prompt
         }
-      ]);
+      ];
+
+      const completion = await this.createCompletion(messages, { model });
 
       const rawResponse = completion?.choices?.[0]?.message?.content;
       const responseText = rawResponse ? rawResponse.trim() : '';
@@ -102,7 +129,8 @@ class ParserService {
       return {
         success: true,
         data: processedData,
-        source
+        source,
+        model // Возвращаем использованную модель для логирования
       };
     } catch (error) {
       console.error('Ошибка парсинга:', error);

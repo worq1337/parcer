@@ -16,9 +16,9 @@ const Userbot = ({ onClose }) => {
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [monitoredBots] = useState([
-    { id: 915326936, name: 'Uzum Bank', username: '@uzumbank_bot' },
-    { id: 856264490, name: 'PayMe', username: '@paymeuz_bot' },
-    { id: 7028509569, name: 'Click', username: '@click_store_bot' }
+    { id: 915326936, name: 'CardXabar', username: '@CardXabarBot' },
+    { id: 856264490, name: 'ID:856264490', username: '(недоступен)' },
+    { id: 7028509569, name: 'NBU Card', username: '@NBUCard_bot' }
   ]);
 
   // Загрузка статуса при монтировании

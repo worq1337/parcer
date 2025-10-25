@@ -235,9 +235,8 @@ def logout():
 
 
 if __name__ == '__main__':
-    bot_names = ', '.join([config.BOT_NAMES.get(bot_id, str(bot_id)) for bot_id in config.MONITOR_BOT_IDS])
     print("🚀 Userbot Service starting...")
-    print(f"📡 Будет мониторить боты: {bot_names}")
+    print(f"📡 Будет мониторить ботов с ID: {config.MONITOR_BOT_IDS}")
     print(f"🎯 Будет пересылать в бот: {config.OUR_BOT_ID}")
     print(f"🌐 API доступен на http://{config.FLASK_HOST}:{config.FLASK_PORT}")
 

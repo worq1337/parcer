@@ -163,7 +163,18 @@ class UserbotManager:
         self.is_running = True
 
         me = await self.client.get_me()
-        bot_names = ', '.join([config.BOT_NAMES.get(bot_id, str(bot_id)) for bot_id in config.MONITOR_BOT_IDS])
+
+        # Получаем реальные названия ботов из Telegram
+        bot_names_list = []
+        for bot_id in config.MONITOR_BOT_IDS:
+            try:
+                bot_entity = await self.client.get_entity(bot_id)
+                bot_name = bot_entity.first_name or f"ID:{bot_id}"
+                bot_names_list.append(f"{bot_name} (@{bot_entity.username})")
+            except Exception:
+                bot_names_list.append(f"ID:{bot_id}")
+
+        bot_names = ', '.join(bot_names_list)
 
         print(f"🤖 Userbot запущен: {me.first_name} (@{me.username})")
         print(f"📡 Мониторим боты: {bot_names}")
@@ -250,8 +261,9 @@ class UserbotManager:
 
             # Проверяем, является ли отправитель одним из мониторимых ботов
             if isinstance(sender, User) and sender.id in config.MONITOR_BOT_IDS:
-                bot_name = config.BOT_NAMES.get(sender.id, sender.first_name)
-                print(f"📨 Получено сообщение от бота {bot_name} (ID: {sender.id})")
+                bot_name = sender.first_name or f"ID:{sender.id}"
+                username = f"@{sender.username}" if sender.username else ""
+                print(f"📨 Получено сообщение от бота {bot_name} {username} (ID: {sender.id})")
 
                 # Получаем текст сообщения
                 message_text = event.message.text
@@ -286,7 +298,18 @@ class UserbotManager:
 
         await self.start()
 
-        bot_names = ', '.join([config.BOT_NAMES.get(bot_id, str(bot_id)) for bot_id in config.MONITOR_BOT_IDS])
+        # Получаем реальные названия ботов из Telegram
+        bot_names_list = []
+        for bot_id in config.MONITOR_BOT_IDS:
+            try:
+                bot_entity = await self.client.get_entity(bot_id)
+                bot_name = bot_entity.first_name or f"ID:{bot_id}"
+                bot_names_list.append(f"{bot_name} (@{bot_entity.username})")
+            except Exception:
+                bot_names_list.append(f"ID:{bot_id}")
+
+        bot_names = ', '.join(bot_names_list)
+
         print("🔄 Userbot работает в фоновом режиме...")
         print(f"📡 Мониторим боты: {bot_names}")
         print(f"🎯 Пересылаем в бот ID: {config.OUR_BOT_ID}")

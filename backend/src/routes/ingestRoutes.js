@@ -614,4 +614,215 @@ router.post('/image', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/ingest/sms
+ * Android SMS Parser endpoint
+ *
+ * Body: {
+ *   sender: string,
+ *   message: string,
+ *   timestamp: number (milliseconds),
+ *   deviceId: string
+ * }
+ *
+ * Response: {
+ *   success: boolean,
+ *   checkId?: string,
+ *   message: string,
+ *   parsedData?: {
+ *     datetime, operator, amount, balance, currency, cardLast4
+ *   }
+ * }
+ */
+router.post('/sms', async (req, res) => {
+  try {
+    const {
+      sender,
+      message,
+      timestamp,
+      deviceId
+    } = req.body;
+
+    // Валидация обязательных полей
+    if (!sender || typeof sender !== 'string' || sender.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sender is required and must be a non-empty string'
+      });
+    }
+
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Message is required and must be a non-empty string'
+      });
+    }
+
+    if (!timestamp || typeof timestamp !== 'number') {
+      return res.status(400).json({
+        success: false,
+        error: 'Timestamp is required and must be a number (milliseconds)'
+      });
+    }
+
+    if (!deviceId || typeof deviceId !== 'string' || deviceId.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'DeviceId is required and must be a non-empty string'
+      });
+    }
+
+    // Парсинг SMS через существующий сервис
+    const parseResult = await parserService.parseReceipt(message, {
+      explicit: 'SMS',
+      addedVia: 'android',
+    });
+
+    if (!parseResult.success) {
+      await logQueueEvent(
+        null,
+        'parse_failed',
+        'sms_android',
+        {
+          status: 'error',
+          message: parseResult.error || 'Failed to parse SMS',
+          metadata: { sender, deviceId, timestamp }
+        }
+      );
+
+      return res.status(422).json({
+        success: false,
+        error: parseResult.error || 'Failed to parse SMS',
+        message: 'Check SMS format and try again'
+      });
+    }
+
+    const parsedItems = Array.isArray(parseResult.data) ? parseResult.data : [parseResult.data];
+    const createdChecks = [];
+    const duplicateSummaries = [];
+
+    for (const [index, rawItem] of parsedItems.entries()) {
+      const payload = {
+        ...rawItem,
+        source: 'SMS',
+        addedVia: 'android',
+        rawText: message,
+        metadata: {
+          ...(rawItem.metadata || {}),
+          sender,
+          deviceId,
+          smsTimestamp: timestamp,
+          index,
+        }
+      };
+
+      // Проверка на дубликат
+      const duplicate = await Check.checkDuplicate(
+        payload.cardLast4 || payload.card_last4,
+        payload.datetime,
+        Math.abs(Number(payload.amount))
+      );
+
+      if (duplicate) {
+        await logQueueEvent(
+          duplicate.check_id,
+          'duplicate_checked',
+          'sms_android',
+          {
+            status: 'warning',
+            message: 'Duplicate SMS detected',
+            metadata: { sender, deviceId, timestamp, index }
+          }
+        );
+
+        duplicateSummaries.push({
+          checkId: duplicate.check_id,
+          datetime: duplicate.datetime,
+          amount: duplicate.amount,
+          currency: duplicate.currency,
+          operator: duplicate.operator,
+          cardLast4: duplicate.card_last4
+        });
+        continue;
+      }
+
+      // Создание нового чека
+      const newCheck = await Check.create(payload);
+
+      await logQueueEvent(
+        newCheck.check_id,
+        'saved',
+        'sms_android',
+        {
+          status: 'ok',
+          message: 'SMS check saved from Android device',
+          metadata: { sender, deviceId, timestamp, index }
+        }
+      );
+
+      eventBus.emitCheckAdded(newCheck, 'SMS');
+
+      createdChecks.push({
+        checkId: newCheck.check_id,
+        datetime: newCheck.datetime,
+        operator: newCheck.operator,
+        amount: newCheck.amount,
+        balance: newCheck.balance,
+        currency: newCheck.currency,
+        cardLast4: newCheck.card_last4,
+        transactionType: newCheck.transaction_type,
+        dateDisplay: newCheck.date_display,
+        timeDisplay: newCheck.time_display
+      });
+    }
+
+    // Формируем ответ
+    if (createdChecks.length === 0) {
+      return res.status(200).json({
+        success: true,
+        status: 'duplicate',
+        message: 'All SMS transactions already exist',
+        duplicates: duplicateSummaries
+      });
+    }
+
+    const responseStatus = duplicateSummaries.length > 0 ? 'partial' : 'success';
+    const responseMessage = duplicateSummaries.length > 0
+      ? `Created ${createdChecks.length}, duplicates: ${duplicateSummaries.length}`
+      : 'SMS processed successfully';
+
+    // Возвращаем первый созданный чек как основной (или единственный)
+    const mainCheck = createdChecks[0];
+
+    res.status(201).json({
+      success: true,
+      status: responseStatus,
+      checkId: mainCheck.checkId,
+      message: responseMessage,
+      parsedData: {
+        datetime: mainCheck.datetime,
+        operator: mainCheck.operator,
+        amount: mainCheck.amount,
+        balance: mainCheck.balance,
+        currency: mainCheck.currency,
+        cardLast4: mainCheck.cardLast4,
+        transactionType: mainCheck.transactionType,
+        dateDisplay: mainCheck.dateDisplay,
+        timeDisplay: mainCheck.timeDisplay
+      },
+      allCreated: createdChecks.length > 1 ? createdChecks : undefined,
+      duplicates: duplicateSummaries.length > 0 ? duplicateSummaries : undefined
+    });
+
+  } catch (error) {
+    console.error('Error processing SMS from Android:', error);
+
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
 module.exports = router;

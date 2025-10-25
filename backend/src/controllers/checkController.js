@@ -175,20 +175,24 @@ class CheckController {
   }
 
   /**
-   * Парсинг чека из текста
+   * Парсинг чека из текста или изображения
    */
   async parse(req, res) {
     try {
-      const { text } = req.body;
+      const { text, imageUrl } = req.body;
 
-      if (!text) {
+      // Проверяем, что передан хотя бы один из параметров
+      if (!text && !imageUrl) {
         return res.status(400).json({
           success: false,
-          error: 'Необходимо предоставить текст чека'
+          error: 'Необходимо предоставить text (текст чека) или imageUrl (ссылка на изображение)'
         });
       }
 
-      const result = await parserService.parseReceipt(text);
+      // Формируем input для парсера
+      const input = imageUrl ? { imageUrl, text } : text;
+
+      const result = await parserService.parseReceipt(input);
 
       if (!result.success) {
         return res.status(400).json({

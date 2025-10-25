@@ -144,12 +144,12 @@ class ParserService {
   /**
    * Выполняет запрос к OpenAI с поддержкой fallback, если модель не умеет response_format
    * @param {Array} messages
-   * @param {{useResponseFormat?: boolean}} options
+   * @param {{useResponseFormat?: boolean, model?: string}} options
    */
-  async createCompletion(messages, { useResponseFormat = true } = {}) {
-    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  async createCompletion(messages, { useResponseFormat = true, model } = {}) {
+    const selectedModel = model || process.env.OPENAI_MODEL || 'gpt-4o-mini';
     const requestBody = {
-      model,
+      model: selectedModel,
       messages,
       temperature: 0.1
     };
@@ -159,11 +159,12 @@ class ParserService {
     }
 
     try {
+      console.log(`[ParserService] Используем модель: ${selectedModel}`);
       return await this.openai.chat.completions.create(requestBody);
     } catch (error) {
       if (useResponseFormat && this.isResponseFormatUnsupported(error)) {
-        console.warn(`Модель ${model} не поддерживает response_format=json_object. Повторяем запрос без структурированного ответа.`);
-        return this.createCompletion(messages, { useResponseFormat: false });
+        console.warn(`Модель ${selectedModel} не поддерживает response_format=json_object. Повторяем запрос без структурированного ответа.`);
+        return this.createCompletion(messages, { useResponseFormat: false, model: selectedModel });
       }
 
       if (this.isRateLimitError(error)) {

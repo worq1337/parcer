@@ -9,6 +9,11 @@ class TelegramBotService {
   constructor() {
     this.bot = null;
     this.allowedUsers = [];
+    // Настройки канала для статусных обновлений
+    this.channelId = process.env.TELEGRAM_CHANNEL_ID || null;
+    this.channelEnabled = process.env.TELEGRAM_CHANNEL_ENABLED === 'true';
+    this.heartbeatInterval = parseInt(process.env.HEARTBEAT_INTERVAL || '3600000', 10); // 1 час по умолчанию
+    this.heartbeatTimer = null;
   }
 
   /**
@@ -31,6 +36,16 @@ class TelegramBotService {
 
     this.setupHandlers();
     console.log('✓ Telegram бот запущен');
+
+    // Инициализация канала для статусных обновлений
+    if (this.channelEnabled && this.channelId) {
+      console.log(`✓ Канал статусов активирован: ${this.channelId}`);
+      this.startHeartbeat();
+    } else if (!this.channelId) {
+      console.log('⚠️  TELEGRAM_CHANNEL_ID не установлен - статусные обновления отключены');
+    } else {
+      console.log('⚠️  Статусные обновления отключены (TELEGRAM_CHANNEL_ENABLED=false)');
+    }
   }
 
   /**
@@ -354,6 +369,9 @@ Merchant: Uzum Market
         const isDuplicate = ingestResponse.data.duplicate;
 
         if (isDuplicate) {
+          // Отправляем статус дубликата в канал
+          await this.sendProcessingStatus('duplicate', check, null, 'telegram_bot');
+
           // patch-017 §1: форматированный ответ с reply
           const amountFormatted = this.formatAmount(Math.abs(check.amount));
           this.bot.sendMessage(
@@ -371,6 +389,9 @@ Merchant: Uzum Market
           return;
         }
 
+        // Отправляем статус успеха в канал
+        await this.sendProcessingStatus('success', check, null, 'telegram_bot');
+
         // patch-017 §1: Новый формат ответа согласно спецификации
         // ✅ Добавлено: № 142 · SQB · Оплата · - 200 000,00 UZS · 06.04.2025 13:18
         // Источник: Telegram | Карта: *6714
@@ -385,6 +406,9 @@ Merchant: Uzum Market
         );
 
       } catch (error) {
+        // Отправляем статус ошибки в канал
+        await this.sendProcessingStatus('error', null, error.message, 'telegram_bot');
+
         // patch-017 §8: безопасное логирование без конфиденциальных данных
         const sanitizedError = sanitizeForLogging({
           message: error.message,
@@ -551,6 +575,9 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
         const isDuplicate = ingestResponse.data.duplicate;
 
         if (isDuplicate) {
+          // Отправляем статус дубликата в канал
+          await this.sendProcessingStatus('duplicate', check, null, 'telegram_bot');
+
           // Дубликат
           const amountFormatted = this.formatAmount(Math.abs(check.amount));
           this.bot.sendMessage(
@@ -566,6 +593,9 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
             }
           );
         } else {
+          // Отправляем статус успеха в канал
+          await this.sendProcessingStatus('success', check, null, 'telegram_bot');
+
           // Успешно добавлен
           const response = this.formatCheckResponseCompact(check);
           this.bot.sendMessage(
@@ -578,6 +608,9 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
           );
         }
       } else {
+        // Отправляем статус ошибки в канал
+        await this.sendProcessingStatus('error', null, ingestResponse.data.error, 'telegram_bot');
+
         // Ошибка при обработке
         this.bot.sendMessage(
           chatId,
@@ -589,6 +622,9 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
       }
 
     } catch (error) {
+      // Отправляем статус ошибки в канал
+      await this.sendProcessingStatus('error', null, error.message, 'telegram_bot');
+
       console.error('Ошибка при обработке фото:', error);
       this.bot.sendMessage(
         chatId,
@@ -663,6 +699,9 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
         const isDuplicate = ingestResponse.data.duplicate;
 
         if (isDuplicate) {
+          // Отправляем статус дубликата в канал
+          await this.sendProcessingStatus('duplicate', check, null, 'telegram_bot');
+
           // Дубликат
           const amountFormatted = this.formatAmount(Math.abs(check.amount));
           this.bot.sendMessage(
@@ -678,6 +717,9 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
             }
           );
         } else {
+          // Отправляем статус успеха в канал
+          await this.sendProcessingStatus('success', check, null, 'telegram_bot');
+
           // Успешно добавлен
           const response = this.formatCheckResponseCompact(check);
           this.bot.sendMessage(
@@ -690,6 +732,9 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
           );
         }
       } else {
+        // Отправляем статус ошибки в канал
+        await this.sendProcessingStatus('error', null, ingestResponse.data.error, 'telegram_bot');
+
         // Ошибка при обработке
         this.bot.sendMessage(
           chatId,
@@ -701,6 +746,9 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
       }
 
     } catch (error) {
+      // Отправляем статус ошибки в канал
+      await this.sendProcessingStatus('error', null, error.message, 'telegram_bot');
+
       console.error('Ошибка при обработке документа:', error);
       this.bot.sendMessage(
         chatId,
@@ -728,9 +776,164 @@ ${check.is_p2p ? '🔄 P2P перевод' : ''}
   }
 
   /**
+   * Отправка статуса обработки чека в канал
+   * @param {string} status - 'success', 'duplicate', или 'error'
+   * @param {object} check - объект чека (если есть)
+   * @param {string} errorMessage - сообщение об ошибке (если status === 'error')
+   * @param {string} source - источник ('telegram_bot', 'userbot', 'android', 'manual')
+   */
+  async sendProcessingStatus(status, check = null, errorMessage = null, source = 'unknown') {
+    if (!this.channelEnabled || !this.channelId || !this.bot) {
+      return;
+    }
+
+    try {
+      let message = '';
+      const timestamp = new Date().toLocaleString('ru-RU', {
+        timeZone: 'Asia/Tashkent',
+        hour12: false
+      });
+
+      // Определяем emoji для источника
+      const sourceEmoji = {
+        telegram_bot: '🤖',
+        userbot: '📡',
+        android: '📱',
+        manual: '✍️',
+        unknown: '❓'
+      };
+
+      const emoji = sourceEmoji[source] || sourceEmoji.unknown;
+
+      if (status === 'success') {
+        // ✅ Успешное добавление
+        const amountAbs = Math.abs(check.amount);
+        const amountFormatted = this.formatAmount(amountAbs);
+        const sign = check.amount < 0 ? '- ' : '+ ';
+
+        message = `✅ *Чек добавлен*\n\n`;
+        message += `${emoji} Источник: ${source}\n`;
+        message += `🆔 ID: \`${check.id}\`\n`;
+        message += `🏦 ${check.operator || 'Н/Д'}`;
+
+        if (check.is_p2p) {
+          message += ` · P2P`;
+        } else if (check.transaction_type) {
+          message += ` · ${check.transaction_type}`;
+        }
+
+        message += `\n💰 ${sign}${amountFormatted} ${check.currency}\n`;
+        message += `📅 ${check.date_display || 'Н/Д'} ${check.time_display || ''}\n`;
+        message += `💳 Карта: *${check.card_last4}\n`;
+        message += `\n⏱ ${timestamp}`;
+
+      } else if (status === 'duplicate') {
+        // ℹ️ Дубликат
+        const amountAbs = Math.abs(check.amount);
+        const amountFormatted = this.formatAmount(amountAbs);
+
+        message = `ℹ️ *Дубликат обнаружен*\n\n`;
+        message += `${emoji} Источник: ${source}\n`;
+        message += `🆔 ID: \`${check.id}\`\n`;
+        message += `🏦 ${check.operator || 'Н/Д'}\n`;
+        message += `💰 ${amountFormatted} ${check.currency}\n`;
+        message += `📅 ${check.date_display || 'Н/Д'} ${check.time_display || ''}\n`;
+        message += `💳 Карта: *${check.card_last4}\n`;
+        message += `\n⏱ ${timestamp}`;
+
+      } else if (status === 'error') {
+        // ❌ Ошибка
+        message = `❌ *Ошибка обработки*\n\n`;
+        message += `${emoji} Источник: ${source}\n`;
+        message += `⚠️ ${errorMessage || 'Неизвестная ошибка'}\n`;
+        message += `\n⏱ ${timestamp}`;
+      }
+
+      // Отправляем в канал
+      await this.bot.sendMessage(this.channelId, message, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+
+      console.log(`✓ Статус "${status}" отправлен в канал ${this.channelId}`);
+
+    } catch (error) {
+      console.error('Ошибка при отправке статуса в канал:', error.message);
+    }
+  }
+
+  /**
+   * Запуск heartbeat - периодическая отправка сообщения о работе бота
+   */
+  startHeartbeat() {
+    if (!this.channelEnabled || !this.channelId) {
+      return;
+    }
+
+    // Очищаем предыдущий таймер, если есть
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+    }
+
+    // Отправляем первое сообщение сразу
+    this.sendHeartbeat();
+
+    // Устанавливаем интервал
+    this.heartbeatTimer = setInterval(() => {
+      this.sendHeartbeat();
+    }, this.heartbeatInterval);
+
+    console.log(`✓ Heartbeat запущен с интервалом ${this.heartbeatInterval / 1000 / 60} минут`);
+  }
+
+  /**
+   * Отправка heartbeat сообщения в канал
+   */
+  async sendHeartbeat() {
+    if (!this.channelEnabled || !this.channelId || !this.bot) {
+      return;
+    }
+
+    try {
+      const timestamp = new Date().toLocaleString('ru-RU', {
+        timeZone: 'Asia/Tashkent',
+        hour12: false
+      });
+
+      const message = `💚 *Бот активен*\n\n` +
+        `🤖 Telegram Bot работает\n` +
+        `📡 Мониторинг каналов активен\n` +
+        `⏱ ${timestamp}`;
+
+      await this.bot.sendMessage(this.channelId, message, {
+        parse_mode: 'Markdown'
+      });
+
+      console.log(`✓ Heartbeat отправлен в канал ${this.channelId}`);
+
+    } catch (error) {
+      console.error('Ошибка при отправке heartbeat:', error.message);
+    }
+  }
+
+  /**
+   * Остановка heartbeat
+   */
+  stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+      console.log('✓ Heartbeat остановлен');
+    }
+  }
+
+  /**
    * Остановка бота
    */
   stop() {
+    // Останавливаем heartbeat
+    this.stopHeartbeat();
+
     if (this.bot) {
       this.bot.stopPolling();
       console.log('Telegram бот остановлен');

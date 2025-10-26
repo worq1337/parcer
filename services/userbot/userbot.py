@@ -45,14 +45,15 @@ class UserbotManager:
             system_version='4.16.30-vxCUSTOM'
         )
 
-        # Регистрируем обработчик сообщений
-        @self.client.on(events.NewMessage)
+        # Регистрируем обработчик сообщений с фильтром incoming=True
+        @self.client.on(events.NewMessage(incoming=True))
         async def message_handler(event):
             await self.handle_new_message(event)
 
         self.new_message_handler = message_handler
 
         print("✅ Telethon клиент инициализирован")
+        print(f"🔍 Обработчик сообщений зарегистрирован (incoming=True)")
 
     async def login(self, phone_number, code=None, password=None):
         """
@@ -258,6 +259,10 @@ class UserbotManager:
         try:
             # Получаем отправителя
             sender = await event.get_sender()
+
+            # Логируем ВСЕ входящие сообщения для отладки
+            sender_info = f"{sender.first_name if hasattr(sender, 'first_name') else 'Unknown'} (ID: {sender.id})"
+            print(f"🔔 Входящее сообщение от: {sender_info}")
 
             # Проверяем, является ли отправитель одним из мониторимых ботов
             if isinstance(sender, User) and sender.id in config.MONITOR_BOT_IDS:

@@ -5,7 +5,7 @@
 -- Создание таблицы bot_messages
 CREATE TABLE IF NOT EXISTS bot_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    bot_id INTEGER NOT NULL, -- ID бота (915326936, 856264490, 7028509569)
+    bot_id BIGINT NOT NULL, -- ID бота (915326936, 856264490, 7028509569)
     telegram_message_id VARCHAR(255), -- ID сообщения в Telegram
     timestamp TIMESTAMP NOT NULL DEFAULT NOW(), -- Время получения сообщения
     status VARCHAR(50) NOT NULL DEFAULT 'unprocessed', -- unprocessed, pending, processed, error

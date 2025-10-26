@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import Icon from './icons/Icon';
+import UserbotChatLayout from './UserbotChat/UserbotChatLayout';
 import '../styles/Userbot.css';
 import { userbotAPI } from '../services/api';
 
 /**
  * Telegram Userbot управление
  * patch-017 §4: UI для логина, мониторинга и управления userbot
+ * v1.0.9: Added chat functionality for bot messages
  */
 const Userbot = ({ onClose }) => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loginStep, setLoginStep] = useState('phone'); // phone, code, password, authorized
+  const [activeTab, setActiveTab] = useState('control'); // control, chat
   const [phoneNumber, setPhoneNumber] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -234,10 +237,31 @@ const Userbot = ({ onClose }) => {
             Автоматическая пересылка сообщений от банковских ботов
           </p>
         </div>
-        {getStatusBadge()}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginRight: '12px' }}>
+            <button
+              className={`btn btn-sm ${activeTab === 'control' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveTab('control')}
+            >
+              <Icon name="settings" size={18} />
+              Управление
+            </button>
+            <button
+              className={`btn btn-sm ${activeTab === 'chat' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveTab('chat')}
+            >
+              <Icon name="chat" size={18} />
+              Чат с ботами
+            </button>
+          </div>
+          {getStatusBadge()}
+        </div>
       </div>
 
-      <div className="userbot-content">
+      {activeTab === 'chat' ? (
+        <UserbotChatLayout />
+      ) : (
+        <div className="userbot-content">
         {/* Левая панель: Логин/Статус */}
         <div className="userbot-section userbot-login-section">
           <h3>
@@ -445,6 +469,7 @@ const Userbot = ({ onClose }) => {
           )}
         </div>
       </div>
+      )}
 
       <div className="userbot-footer">
         <button className="btn btn-secondary" onClick={onClose}>

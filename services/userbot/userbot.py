@@ -7,6 +7,8 @@ patch-017 §4: Telethon Userbot
 import os
 import asyncio
 import requests
+import psycopg2
+from datetime import datetime
 from telethon import TelegramClient, events
 from telethon.tl.types import User
 import config
@@ -30,6 +32,9 @@ class UserbotManager:
 
         # Обработчик для новых сообщений
         self.new_message_handler = None
+
+        # Подключение к БД
+        self.db_conn = None
 
     async def initialize(self):
         """
@@ -249,6 +254,40 @@ class UserbotManager:
                 'error': str(e)
             }
 
+    def save_message_to_db(self, bot_id, telegram_message_id, text):
+        """
+        Сохранить сообщение в БД
+        """
+        try:
+            # Подключение к БД (получаем из переменных окружения)
+            if not self.db_conn or self.db_conn.closed:
+                self.db_conn = psycopg2.connect(
+                    host=os.getenv('DB_HOST', 'postgres'),
+                    port=os.getenv('DB_PORT', '5432'),
+                    database=os.getenv('DB_NAME', 'receipt_parser'),
+                    user=os.getenv('DB_USER', 'postgres'),
+                    password=os.getenv('DB_PASSWORD', 'postgres')
+                )
+
+            cursor = self.db_conn.cursor()
+
+            # Вставить сообщение со статусом 'unprocessed'
+            cursor.execute(
+                """INSERT INTO bot_messages
+                   (bot_id, telegram_message_id, timestamp, text, status, process_attempts)
+                   VALUES (%s, %s, %s, %s, 'unprocessed', 0)""",
+                (bot_id, str(telegram_message_id), datetime.now(), text)
+            )
+
+            self.db_conn.commit()
+            cursor.close()
+            print(f"💾 Сообщение сохранено в БД (bot_id={bot_id})")
+
+        except Exception as db_error:
+            print(f"❌ Ошибка сохранения в БД: {db_error}")
+            if self.db_conn:
+                self.db_conn.rollback()
+
     async def handle_new_message(self, event):
         """
         Обработчик новых сообщений
@@ -278,6 +317,9 @@ class UserbotManager:
                     return
 
                 print(f"📝 Текст сообщения (первые 100 символов): {message_text[:100]}")
+
+                # Сохраняем сообщение в БД для чата
+                self.save_message_to_db(sender.id, event.message.id, message_text)
 
                 # Пересылаем сообщение в наш бот
                 try:

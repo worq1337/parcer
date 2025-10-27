@@ -69,11 +69,13 @@ class CheckController {
       const checkData = req.body;
 
       // Проверка на дубликат
-      const duplicate = await Check.checkDuplicate(
-        checkData.cardLast4,
-        checkData.datetime,
-        checkData.amount
-      );
+      const duplicate = await Check.checkDuplicate({
+        cardLast4: checkData.cardLast4 || checkData.card_last4,
+        datetime: checkData.datetime,
+        amount: checkData.amount,
+        operator: checkData.operator,
+        transactionType: checkData.transactionType,
+      });
 
       if (duplicate) {
         await logQueueEvent(
@@ -202,11 +204,13 @@ class CheckController {
       }
 
       // Проверка на дубликат
-      const duplicate = await Check.checkDuplicate(
-        result.data.cardLast4,
-        result.data.datetime,
-        Math.abs(result.data.amount)
-      );
+      const duplicate = await Check.checkDuplicate({
+        cardLast4: result.data.cardLast4 || result.data.card_last4,
+        datetime: result.data.datetime,
+        amount: Math.abs(result.data.amount),
+        operator: result.data.operator,
+        transactionType: result.data.transactionType,
+      });
 
       if (duplicate) {
         await logQueueEvent(

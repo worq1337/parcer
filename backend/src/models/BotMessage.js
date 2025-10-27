@@ -17,12 +17,15 @@ class BotMessage {
    */
   static async getByBotId(botId, options = {}) {
     const { status, limit = 50, offset = 0 } = options;
+    const chatId = String(botId);
 
     let query = `
       SELECT
         id,
         bot_id,
         telegram_message_id,
+        chat_id,
+        message_id,
         timestamp,
         status,
         text,
@@ -33,10 +36,10 @@ class BotMessage {
         created_at,
         updated_at
       FROM bot_messages
-      WHERE bot_id = $1
+      WHERE chat_id = $1
     `;
 
-    const params = [botId];
+    const params = [chatId];
 
     // Добавляем фильтр по статусу если указан
     if (status && status !== 'all') {
@@ -54,8 +57,8 @@ class BotMessage {
     const result = await pool.query(query, params);
 
     // Подсчитать общее количество (для hasMore)
-    let countQuery = 'SELECT COUNT(*) as total FROM bot_messages WHERE bot_id = $1';
-    const countParams = [botId];
+    let countQuery = 'SELECT COUNT(*) as total FROM bot_messages WHERE chat_id = $1';
+    const countParams = [chatId];
     if (status && status !== 'all') {
       countQuery += ' AND status = $2';
       countParams.push(status);
@@ -81,6 +84,17 @@ class BotMessage {
     return result.rows[0];
   }
 
+  static async findByChatAndMessage(chatId, messageId) {
+    if (!chatId || !messageId) {
+      return null;
+    }
+    const result = await pool.query(
+      'SELECT * FROM bot_messages WHERE chat_id = $1 AND message_id = $2 LIMIT 1',
+      [String(chatId), String(messageId)]
+    );
+    return result.rows[0] || null;
+  }
+
   /**
    * Создать новое сообщение
    */
@@ -88,6 +102,8 @@ class BotMessage {
     const {
       bot_id,
       telegram_message_id,
+      chat_id,
+      message_id,
       timestamp,
       text,
       status = 'unprocessed',
@@ -95,12 +111,29 @@ class BotMessage {
       error = null
     } = messageData;
 
+    const resolvedChatId = chat_id ?? bot_id ?? messageData.chatId ?? messageData.botId;
+    const resolvedMessageId = message_id ?? telegram_message_id ?? messageData.messageId;
+
+    if (resolvedChatId == null) {
+      throw new Error('chat_id is required to create bot message');
+    }
+
     const result = await pool.query(
       `INSERT INTO bot_messages
-        (bot_id, telegram_message_id, timestamp, text, status, data, error, process_attempts)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 0)
+        (bot_id, telegram_message_id, chat_id, message_id, timestamp, text, status, data, error, process_attempts)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0)
       RETURNING *`,
-      [bot_id, telegram_message_id, timestamp, text, status, JSON.stringify(data), error]
+      [
+        resolvedChatId != null ? String(resolvedChatId) : null,
+        resolvedMessageId != null ? String(resolvedMessageId) : null,
+        String(resolvedChatId),
+        resolvedMessageId != null ? String(resolvedMessageId) : null,
+        timestamp,
+        text,
+        status,
+        data ? JSON.stringify(data) : null,
+        error
+      ]
     );
 
     return result.rows[0];
@@ -146,14 +179,15 @@ class BotMessage {
    * Получить статистику по боту
    */
   static async getStatsByBotId(botId) {
+    const chatId = String(botId);
     const result = await pool.query(
       `SELECT
         status,
         COUNT(*) as count
       FROM bot_messages
-      WHERE bot_id = $1
+      WHERE chat_id = $1
       GROUP BY status`,
-      [botId]
+      [chatId]
     );
 
     const stats = {
@@ -200,12 +234,13 @@ class BotMessage {
    * Получить последние N сообщений (для реал-тайм обновлений)
    */
   static async getRecent(botId, limit = 10) {
+    const chatId = String(botId);
     const result = await pool.query(
       `SELECT * FROM bot_messages
-      WHERE bot_id = $1
+      WHERE chat_id = $1
       ORDER BY timestamp DESC
       LIMIT $2`,
-      [botId, limit]
+      [chatId, limit]
     );
 
     return result.rows;

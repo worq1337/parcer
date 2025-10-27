@@ -20,7 +20,8 @@ const api = axios.create({
 api.interceptors.response.use(
   response => response,
   error => {
-    console.error('Userbot Chat API Error:', error);
+    const detail = error?.response?.data || error?.message;
+    console.error('Userbot Chat API Error:', detail);
     return Promise.reject(error);
   }
 );
@@ -70,21 +71,35 @@ export const getHistory = async (botId, status = 'all') => {
 
 /**
  * Process single message manually
- * @param {string} messageId - Message UUID
+ * @param {object} payload
  * @returns {Promise<object>} Processing result
  */
-export const processMessage = async (messageId) => {
-  const response = await api.post('/process', { messageId });
+export const processMessage = async (payload) => {
+  const body = {
+    record_id: payload?.recordId || payload?.id || null,
+    chat_id: payload?.chatId != null ? String(payload.chatId) : null,
+    message_id: payload?.messageId != null ? String(payload.messageId) : null,
+    raw_text: payload?.rawText ?? ''
+  };
+
+  const response = await api.post('/process', body);
   return response.data;
 };
 
 /**
  * Process multiple messages in bulk
- * @param {Array<string>} messageIds - Array of message UUIDs
+ * @param {Array<object>} messages
  * @returns {Promise<object>} Bulk processing result
  */
-export const processMultiple = async (messageIds) => {
-  const response = await api.post('/process-multiple', { messageIds });
+export const processMultiple = async (messages) => {
+  const payload = messages.map((message) => ({
+    record_id: message?.recordId || message?.id || null,
+    chat_id: message?.chatId != null ? String(message.chatId) : null,
+    message_id: message?.messageId != null ? String(message.messageId) : null,
+    raw_text: message?.rawText ?? ''
+  }));
+
+  const response = await api.post('/process-multiple', { messages: payload });
   return response.data;
 };
 
@@ -98,6 +113,17 @@ export const retryMessage = async (messageId) => {
   return response.data;
 };
 
+/**
+ * Load message history from Telegram for specific bot
+ * @param {number} botId - Bot ID
+ * @param {number|null} days - Number of days to load (null = all history)
+ * @returns {Promise<object>} Loading result: {success, loaded, saved, skipped, errors}
+ */
+export const loadHistory = async (botId, days = null) => {
+  const response = await api.post(`/load-history/${botId}`, { days });
+  return response.data;
+};
+
 // Export default service object
 const userbotChatService = {
   getBots,
@@ -105,7 +131,8 @@ const userbotChatService = {
   getHistory,
   processMessage,
   processMultiple,
-  retryMessage
+  retryMessage,
+  loadHistory
 };
 
 export default userbotChatService;

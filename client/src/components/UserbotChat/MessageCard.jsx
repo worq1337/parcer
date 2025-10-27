@@ -85,7 +85,7 @@ const MessageCard = ({
         {message.status === 'unprocessed' && (
           <button
             className="btn btn-primary btn-sm"
-            onClick={() => onProcess(message.id)}
+            onClick={() => onProcess(message)}
           >
             <Icon name="play_arrow" size={16} />
             Обработать

@@ -1,5 +1,9 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 require('dotenv').config();
+
+// Возвращать BIGINT как строку, чтобы не терять точность и не путать типы
+// OID 20 — BIGINT
+types.setTypeParser(20, (val) => (val === null ? null : BigInt(val).toString()));
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',

@@ -230,6 +230,101 @@ def logout():
     except Exception as e:
         return jsonify({
             'success': False,
+        'error': str(e)
+    }), 500
+
+
+@app.route('/message-text', methods=['POST'])
+def message_text():
+    """Получить текст сообщения по chat_id/message_id"""
+    try:
+        data = request.json or {}
+        chat_id = data.get('chat_id') or data.get('chatId')
+        message_id = data.get('message_id') or data.get('messageId')
+
+        if not chat_id or not message_id:
+            return jsonify({
+                'success': False,
+                'error': 'chat_id и message_id обязательны'
+            }), 400
+
+        text = run_async(userbot_manager.fetch_message_text(chat_id, message_id))
+
+        return jsonify({
+            'success': True,
+            'text': text
+        }), 200
+
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 404
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/load-history', methods=['POST'])
+def load_history():
+    """
+    Загрузить историю сообщений от бота
+
+    Request body:
+    {
+        "bot_id": 915326936,
+        "bot_username": "@CardXabarBot",
+        "days": 30  (optional, None = вся история)
+    }
+
+    Response:
+    {
+        "success": true,
+        "loaded": 150,  # Всего загружено из Telegram
+        "saved": 120,   # Сохранено в БД (новых)
+        "skipped": 30,  # Пропущено (дубликаты)
+        "errors": 0     # Ошибок
+    }
+    """
+    try:
+        data = request.json
+
+        bot_id = data.get('bot_id')
+        bot_username = data.get('bot_username')
+        days = data.get('days')  # None = вся история
+
+        if not bot_id or not bot_username:
+            return jsonify({
+                'success': False,
+                'error': 'Требуется bot_id и bot_username'
+            }), 400
+
+        # Вызвать загрузку истории через userbot_manager
+        result = run_async(
+            userbot_manager.load_bot_history(
+                bot_id=bot_id,
+                bot_username=bot_username,
+                days=days
+            )
+        )
+
+        if 'error_message' in result:
+            return jsonify({
+                'success': False,
+                'error': result['error_message'],
+                **result
+            }), 500
+
+        return jsonify({
+            'success': True,
+            **result
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
             'error': str(e)
         }), 500
 

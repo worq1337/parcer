@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telegram Userbot - Финальный прототип</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: #1a1a1a;
+      color: #ffffff;
+    }
+
+    /* Имитация вашего приложения */
+    .app-container {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #1a1a1a;
+    }
+
+    /* Header */
+    .app-header {
+      background: #2a2a2a;
+      padding: 15px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #3a3a3a;
+    }
+
+    .app-title {
+      font-size: 20px;
+      font-weight: 500;
+    }
+
+    .header-btn {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-refresh {
+      background: transparent;
+      color: #4a9eff;
+      border: 1px solid #4a9eff;
+    }
+
+    .btn-refresh:hover {
+      background: rgba(74, 158, 255, 0.1);
+    }
+
+    /* Tabs Navigation */
+    .tabs-nav {
+      background: #2a2a2a;
+      display: flex;
+      padding: 0 30px;
+      border-bottom: 1px solid #3a3a3a;
+    }
+
+    .tab-item {
+      padding: 15px 25px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #888;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab-item:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-item.active {
+      color: #4a9eff;
+      border-bottom-color: #4a9eff;
+    }
+
+    /* Main Content */
+    .userbot-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 30px;
+      overflow: hidden;
+    }
+
+    .content-header {
+      margin-bottom: 20px;
+    }
+
+    .content-title {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .content-subtitle {
+      font-size: 14px;
+      color: #888;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #4caf50;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Main Layout */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 20px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Left Panel - User Info + Bots */
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    .user-card {
+      background: #2a2a2a;
+      border-radius: 12px;
+      padding: 25px;
+      border: 1px solid #3a3a3a;
+    }
+
+    .user-info {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .user-name {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .user-username {
+      color: #4a9eff;
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+
+    .user-phone {
+      color: #888;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .user-id {
+      color: #666;
+      font-size: 12px;
+    }
+
+    .logout-btn {
+      width: 100%;
+      padding: 12px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .logout-btn:hover {
+      background: #d32f2f;
+    }
+
+    .bots-card {
+      background: #2a2a2a;
+      border-radius: 12px;
+      border: 1px solid #3a3a3a;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bots-header {
+      padding: 20px;
+      border-bottom: 1px solid #3a3a3a;
+    }
+
+    .bots-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .bots-count {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .bots-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .bot-item {
+      padding: 18px 20px;
+      border-bottom: 1px solid #3a3a3a;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .bot-item:hover {
+      background: rgba(74, 158, 255, 0.05);
+    }
+
+    .bot-item.active {
+      background: rgba(74, 158, 255, 0.1);
+      border-left: 3px solid #4a9eff;
+    }
+
+    .bot-avatar {
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .bot-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bot-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .bot-username {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .bot-stats {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .stat-badge {
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stat-badge.success {
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+    }
+
+    .stat-badge.pending {
+      background: rgba(255, 152, 0, 0.2);
+      color: #ff9800;
+    }
+
+    .stat-badge.error {
+      background: rgba(244, 67, 54, 0.2);
+      color: #f44336;
+    }
+
+    .stat-badge.unprocessed {
+      background: rgba(74, 158, 255, 0.2);
+      color: #4a9eff;
+    }
+
+    /* Right Panel - Chat */
+    .chat-panel {
+      background: #2a2a2a;
+      border-radius: 12px;
+      border: 1px solid #3a3a3a;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 20px 25px;
+      border-bottom: 1px solid #3a3a3a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-bot-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .chat-bot-name {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .chat-bot-username {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .chat-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .action-btn {
+      padding: 8px 16px;
+      background: transparent;
+      border: 1px solid #3a3a3a;
+      color: #888;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .action-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      border-color: #4a9eff;
+    }
+
+    .action-btn.primary {
+      background: #4a9eff;
+      color: white;
+      border-color: #4a9eff;
+    }
+
+    .action-btn.primary:hover {
+      background: #3d8ae6;
+    }
+
+    .action-btn.success {
+      background: #4caf50;
+      color: white;
+      border-color: #4caf50;
+    }
+
+    .action-btn.success:hover {
+      background: #45a049;
+    }
+
+    /* Filters */
+    .filters-bar {
+      padding: 15px 25px;
+      border-bottom: 1px solid #3a3a3a;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .filter-btn {
+      padding: 6px 14px;
+      background: transparent;
+      border: 1px solid #3a3a3a;
+      color: #888;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+
+    .filter-btn.active {
+      background: #4a9eff;
+      color: white;
+      border-color: #4a9eff;
+    }
+
+    .filter-count {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .filter-btn.active .filter-count {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Messages Area */
+    .messages-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 25px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .message-card {
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 10px;
+      padding: 16px;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .message-card:hover {
+      border-color: #4a9eff;
+      box-shadow: 0 2px 8px rgba(74, 158, 255, 0.1);
+    }
+
+    .message-card.selected {
+      border-color: #4a9eff;
+      background: rgba(74, 158, 255, 0.05);
+    }
+
+    .message-select {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .message-content-wrapper {
+      margin-left: 30px;
+    }
+
+    .message-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .message-time {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .message-status {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .message-status.processed {
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+    }
+
+    .message-status.pending {
+      background: rgba(255, 152, 0, 0.2);
+      color: #ff9800;
+    }
+
+    .message-status.error {
+      background: rgba(244, 67, 54, 0.2);
+      color: #f44336;
+    }
+
+    .message-status.unprocessed {
+      background: rgba(74, 158, 255, 0.2);
+      color: #4a9eff;
+    }
+
+    .message-text {
+      background: #2a2a2a;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #ccc;
+      margin-bottom: 12px;
+      white-space: pre-line;
+      border-left: 3px solid #3a3a3a;
+    }
+
+    .message-data {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .data-item {
+      background: #2a2a2a;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+    }
+
+    .data-label {
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .data-value {
+      font-size: 13px;
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .message-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .msg-action-btn {
+      padding: 6px 12px;
+      background: transparent;
+      border: 1px solid #3a3a3a;
+      color: #888;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .msg-action-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      border-color: #4a9eff;
+    }
+
+    .msg-action-btn.primary {
+      background: #4a9eff;
+      color: white;
+      border-color: #4a9eff;
+    }
+
+    .msg-action-btn.primary:hover {
+      background: #3d8ae6;
+    }
+
+    .msg-action-btn.success {
+      background: #4caf50;
+      color: white;
+      border-color: #4caf50;
+    }
+
+    .msg-action-btn.success:hover {
+      background: #45a049;
+    }
+
+    /* Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #888;
+    }
+
+    .empty-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+
+    .empty-text {
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: #ccc;
+    }
+
+    .empty-subtext {
+      font-size: 14px;
+      color: #888;
+    }
+
+    /* Bulk Actions Bar */
+    .bulk-actions-bar {
+      padding: 15px 25px;
+      border-top: 1px solid #3a3a3a;
+      background: rgba(74, 158, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .bulk-info {
+      font-size: 14px;
+      color: #ccc;
+    }
+
+    .bulk-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1a1a1a;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #3a3a3a;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4a4a4a;
+    }
+
+    /* Load More */
+    .load-more {
+      text-align: center;
+      padding: 15px;
+    }
+
+    .load-more-btn {
+      padding: 8px 20px;
+      background: transparent;
+      border: 1px solid #3a3a3a;
+      color: #888;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .load-more-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      border-color: #4a9eff;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Mock данные
+    const mockBots = [
+      {
+        id: 1,
+        name: 'CardXabar',
+        username: '@CardXabarBot',
+        icon: '💳',
+        telegramId: '5153269396',
+        stats: {
+          processed: 38,
+          pending: 5,
+          errors: 2,
+          unprocessed: 12
+        }
+      },
+      {
+        id: 2,
+        name: 'ID:856264490',
+        username: '(недоступен)',
+        icon: '🏦',
+        telegramId: '856264490',
+        stats: {
+          processed: 15,
+          pending: 2,
+          errors: 1,
+          unprocessed: 5
+        }
+      },
+      {
+        id: 3,
+        name: 'NBU Card',
+        username: '@NBUCard_bot',
+        icon: '💰',
+        telegramId: '7028505569',
+        stats: {
+          processed: 26,
+          pending: 0,
+          errors: 0,
+          unprocessed: 3
+        }
+      }
+    ];
+
+    const generateMockMessages = (botId, count = 20) => {
+      const statuses = ['processed', 'pending', 'error', 'unprocessed'];
+      const messages = [];
+      
+      for (let i = 0; i < count; i++) {
+        const status = statuses[Math.floor(Math.random() * statuses.length)];
+        const now = new Date();
+        now.setHours(now.getHours() - i);
+        
+        messages.push({
+          id: `${botId}-${i}`,
+          botId,
+          time: now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: now.toISOString(),
+          status,
+          text: `Покупка ${i + 1}\nSumma: ${150000 + i * 1000},00 UZS\nMerchant: Uzum Market\nKarta: *${1234 + i}\nSana: ${now.toLocaleDateString('ru-RU')} ${now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`,
+          data: {
+            amount: `${(150000 + i * 1000).toLocaleString()} UZS`,
+            merchant: 'Uzum Market',
+            card: `*${1234 + i}`,
+            date: now.toLocaleDateString('ru-RU'),
+            time: now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+            type: 'Покупка'
+          }
+        });
+      }
+      
+      return messages;
+    };
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('userbot');
+      const [selectedBotId, setSelectedBotId] = useState(null);
+      const [filter, setFilter] = useState('all');
+      const [selectedMessages, setSelectedMessages] = useState([]);
+      const [messages, setMessages] = useState([]);
+
+      useEffect(() => {
+        if (selectedBotId) {
+          setMessages(generateMockMessages(selectedBotId, 20));
+          setSelectedMessages([]);
+        }
+      }, [selectedBotId]);
+
+      const selectedBot = mockBots.find(b => b.id === selectedBotId);
+      
+      const filteredMessages = messages.filter(msg => {
+        if (filter === 'all') return true;
+        return msg.status === filter;
+      });
+
+      const handleSelectMessage = (messageId) => {
+        setSelectedMessages(prev => 
+          prev.includes(messageId) 
+            ? prev.filter(id => id !== messageId)
+            : [...prev, messageId]
+        );
+      };
+
+      const handleSelectAll = () => {
+        if (selectedMessages.length === filteredMessages.length) {
+          setSelectedMessages([]);
+        } else {
+          setSelectedMessages(filteredMessages.map(m => m.id));
+        }
+      };
+
+      const handleProcessSelected = () => {
+        alert(`Обработка ${selectedMessages.length} сообщений...`);
+        setSelectedMessages([]);
+      };
+
+      const handleLoadMore = () => {
+        const newMessages = generateMockMessages(selectedBotId, 20);
+        setMessages(prev => [...prev, ...newMessages]);
+      };
+
+      const getStatusText = (status) => {
+        const map = {
+          processed: 'Обработано',
+          pending: 'В очереди',
+          error: 'Ошибка',
+          unprocessed: 'Не обработано'
+        };
+        return map[status] || status;
+      };
+
+      const getStatusIcon = (status) => {
+        const map = {
+          processed: '✓',
+          pending: '⏱',
+          error: '✕',
+          unprocessed: '📝'
+        };
+        return map[status] || '?';
+      };
+
+      const getFilterCount = (filterType) => {
+        if (filterType === 'all') return messages.length;
+        return messages.filter(m => m.status === filterType).length;
+      };
+
+      return (
+        <div className="app-container">
+          {/* Header */}
+          <div className="app-header">
+            <div className="app-title">Парсер банковских чеков</div>
+            <button className="header-btn btn-refresh">
+              🔄 Обновить
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="tabs-nav">
+            <div 
+              className={`tab-item ${activeTab === 'checks' ? 'active' : ''}`}
+              onClick={() => setActiveTab('checks')}
+            >
+              Чеки
+            </div>
+            <div 
+              className={`tab-item ${activeTab === 'operators' ? 'active' : ''}`}
+              onClick={() => setActiveTab('operators')}
+            >
+              Справочник операторов
+            </div>
+            <div 
+              className={`tab-item ${activeTab === 'admin' ? 'active' : ''}`}
+              onClick={() => setActiveTab('admin')}
+            >
+              Администрирование
+            </div>
+            <div 
+              className={`tab-item ${activeTab === 'userbot' ? 'active' : ''}`}
+              onClick={() => setActiveTab('userbot')}
+            >
+              Telegram userbot
+            </div>
+          </div>
+
+          {/* Content */}
+          {activeTab === 'userbot' && (
+            <div className="userbot-content">
+              <div className="content-header">
+                <h1 className="content-title">Telegram Userbot</h1>
+                <p className="content-subtitle">Автоматическая пересылка сообщений от банковских ботов</p>
+              </div>
+
+              <div className="status-badge">
+                <span className="status-dot"></span>
+                ЗАПУЩЕН
+              </div>
+
+              <div className="main-layout">
+                {/* Left Panel */}
+                <div className="left-panel">
+                  {/* User Card */}
+                  <div className="user-card">
+                    <div className="user-info">
+                      <div className="user-name">Svyatoslav Lee</div>
+                      <div className="user-username">@stlee</div>
+                      <div className="user-phone">998911357080</div>
+                      <div className="user-id">ID: 1122646881</div>
+                    </div>
+                    <button className="logout-btn">Выйти из аккаунта</button>
+                  </div>
+
+                  {/* Bots List */}
+                  <div className="bots-card">
+                    <div className="bots-header">
+                      <div className="bots-title">Мониторимые боты</div>
+                      <div className="bots-count">{mockBots.length} бота</div>
+                    </div>
+                    <div className="bots-list">
+                      {mockBots.map(bot => (
+                        <div
+                          key={bot.id}
+                          className={`bot-item ${selectedBotId === bot.id ? 'active' : ''}`}
+                          onClick={() => setSelectedBotId(bot.id)}
+                        >
+                          <div className="bot-avatar">{bot.icon}</div>
+                          <div className="bot-info">
+                            <div className="bot-name">{bot.name}</div>
+                            <div className="bot-username">{bot.username}</div>
+                            <div className="bot-stats">
+                              <span className="stat-badge success">
+                                ✓ {bot.stats.processed}
+                              </span>
+                              <span className="stat-badge pending">
+                                ⏱ {bot.stats.pending}
+                              </span>
+                              {bot.stats.errors > 0 && (
+                                <span className="stat-badge error">
+                                  ✕ {bot.stats.errors}
+                                </span>
+                              )}
+                              <span className="stat-badge unprocessed">
+                                📝 {bot.stats.unprocessed}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Panel - Chat */}
+                <div className="chat-panel">
+                  {selectedBot ? (
+                    <>
+                      {/* Chat Header */}
+                      <div className="chat-header">
+                        <div className="chat-bot-info">
+                          <div className="bot-avatar">{selectedBot.icon}</div>
+                          <div>
+                            <div className="chat-bot-name">{selectedBot.name}</div>
+                            <div className="chat-bot-username">{selectedBot.username}</div>
+                          </div>
+                        </div>
+                        <div className="chat-actions">
+                          <button className="action-btn">
+                            🔍 Поиск
+                          </button>
+                          <button className="action-btn success">
+                            🔄 Загрузить историю
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Filters */}
+                      <div className="filters-bar">
+                        <button
+                          className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
+                          onClick={() => setFilter('all')}
+                        >
+                          Все
+                          <span className="filter-count">{getFilterCount('all')}</span>
+                        </button>
+                        <button
+                          className={`filter-btn ${filter === 'unprocessed' ? 'active' : ''}`}
+                          onClick={() => setFilter('unprocessed')}
+                        >
+                          📝 Не обработано
+                          <span className="filter-count">{getFilterCount('unprocessed')}</span>
+                        </button>
+                        <button
+                          className={`filter-btn ${filter === 'processed' ? 'active' : ''}`}
+                          onClick={() => setFilter('processed')}
+                        >
+                          ✓ Обработано
+                          <span className="filter-count">{getFilterCount('processed')}</span>
+                        </button>
+                        <button
+                          className={`filter-btn ${filter === 'pending' ? 'active' : ''}`}
+                          onClick={() => setFilter('pending')}
+                        >
+                          ⏱ В очереди
+                          <span className="filter-count">{getFilterCount('pending')}</span>
+                        </button>
+                        <button
+                          className={`filter-btn ${filter === 'error' ? 'active' : ''}`}
+                          onClick={() => setFilter('error')}
+                        >
+                          ✕ Ошибки
+                          <span className="filter-count">{getFilterCount('error')}</span>
+                        </button>
+                      </div>
+
+                      {/* Messages */}
+                      <div className="messages-area">
+                        {filteredMessages.length === 0 ? (
+                          <div className="empty-state">
+                            <div className="empty-icon">📭</div>
+                            <div className="empty-text">Нет сообщений</div>
+                            <div className="empty-subtext">
+                              {filter === 'all' 
+                                ? 'Сообщения от этого бота будут появляться здесь'
+                                : 'Нет сообщений с таким статусом'
+                              }
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {filteredMessages.map(msg => (
+                              <div 
+                                key={msg.id} 
+                                className={`message-card ${selectedMessages.includes(msg.id) ? 'selected' : ''}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="message-select"
+                                  checked={selectedMessages.includes(msg.id)}
+                                  onChange={() => handleSelectMessage(msg.id)}
+                                />
+                                <div className="message-content-wrapper">
+                                  <div className="message-header">
+                                    <span className="message-time">{msg.time}</span>
+                                    <span className={`message-status ${msg.status}`}>
+                                      {getStatusIcon(msg.status)} {getStatusText(msg.status)}
+                                    </span>
+                                  </div>
+
+                                  <div className="message-text">{msg.text}</div>
+
+                                  <div className="message-data">
+                                    {Object.entries(msg.data).map(([key, value]) => (
+                                      <div key={key} className="data-item">
+                                        <div className="data-label">{key}</div>
+                                        <div className="data-value">{value}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="message-actions">
+                                    {msg.status === 'unprocessed' && (
+                                      <>
+                                        <button className="msg-action-btn primary">
+                                          ✓ Обработать
+                                        </button>
+                                        <button className="msg-action-btn">
+                                          📋 Копировать
+                                        </button>
+                                      </>
+                                    )}
+                                    {msg.status === 'pending' && (
+                                      <button className="msg-action-btn">
+                                        🔄 Повторить
+                                      </button>
+                                    )}
+                                    {msg.status === 'error' && (
+                                      <>
+                                        <button className="msg-action-btn primary">
+                                          🔧 Исправить
+                                        </button>
+                                        <button className="msg-action-btn">
+                                          📋 Копировать
+                                        </button>
+                                      </>
+                                    )}
+                                    {msg.status === 'processed' && (
+                                      <button className="msg-action-btn success">
+                                        👁 Посмотреть в таблице
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+
+                            <div className="load-more">
+                              <button className="load-more-btn" onClick={handleLoadMore}>
+                                ⬆️ Загрузить ещё
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Bulk Actions */}
+                      {selectedMessages.length > 0 && (
+                        <div className="bulk-actions-bar">
+                          <div className="bulk-info">
+                            Выбрано: {selectedMessages.length}
+                          </div>
+                          <div className="bulk-actions">
+                            <button className="action-btn" onClick={handleSelectAll}>
+                              {selectedMessages.length === filteredMessages.length ? 'Снять выделение' : 'Выбрать все'}
+                            </button>
+                            <button className="action-btn primary" onClick={handleProcessSelected}>
+                              ✓ Обработать выбранные
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-icon">👈</div>
+                      <div className="empty-text">Выберите бота</div>
+                      <div className="empty-subtext">Кликните на бота слева чтобы увидеть сообщения</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab !== 'userbot' && (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+              <p>Содержимое вкладки "{activeTab}"</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

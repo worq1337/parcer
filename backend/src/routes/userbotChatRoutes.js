@@ -7,11 +7,12 @@ const express = require('express');
 const router = express.Router();
 const BotMessage = require('../models/BotMessage');
 const parserService = require('../services/parserService');
+const notifier = require('../services/telegramNotifier');
 
 // Конфигурация мониторимых ботов
 const MONITORED_BOTS = [
   { id: 915326936, name: 'CardXabar', username: '@CardXabarBot', icon: '💳' },
-  { id: 856264490, name: 'ID:856264490', username: '(недоступен)', icon: '🏦' },
+  { id: 856254490, name: 'ID:856254490', username: '(недоступен)', icon: '🏦' },
   { id: 7028509569, name: 'NBU Card', username: '@NBUCard_bot', icon: '🏦' }
 ];
 
@@ -72,11 +73,15 @@ router.get('/messages/:botId', async (req, res) => {
     }
 
     // Получить сообщения
-    const result = await BotMessage.getByBotId(parseInt(botId), {
+    console.log(`📬 Loading messages for bot_id=${botId}, status=${status}, limit=${limit}, offset=${offset}`);
+
+    const result = await BotMessage.getByBotId(botId, {
       status,
       limit: parseInt(limit),
       offset: parseInt(offset)
     });
+
+    console.log(`📊 Loaded ${result.messages?.length || 0} messages, total=${result.total || 0}`);
 
     res.json({
       success: true,
@@ -109,7 +114,7 @@ router.get('/history/:botId', async (req, res) => {
     }
 
     // Получить все сообщения без лимита
-    const result = await BotMessage.getByBotId(parseInt(botId), {
+    const result = await BotMessage.getByBotId(botId, {
       status,
       limit: 10000, // Большой лимит для полной истории
       offset: 0
@@ -137,72 +142,236 @@ router.get('/history/:botId', async (req, res) => {
  *   "messageId": "uuid"
  * }
  */
+const USERBOT_SERVICE_URL = process.env.USERBOT_SERVICE_URL || 'http://userbot:5001';
+
+async function fetchMessageTextFromUserbot(chatId, messageId) {
+  try {
+    const response = await fetch(`${USERBOT_SERVICE_URL}/message-text`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId
+      })
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+      return null;
+    }
+    return typeof data.text === 'string' ? data.text : null;
+  } catch (error) {
+    console.warn('fetchMessageTextFromUserbot failed:', error.message);
+    return null;
+  }
+}
+
+async function resolveMessageRecord({ recordId, chatId, messageId }) {
+  let record = null;
+  if (recordId) {
+    record = await BotMessage.getById(recordId);
+  }
+  if (!record && chatId && messageId) {
+    record = await BotMessage.findByChatAndMessage(chatId, messageId);
+  }
+  return record;
+}
+
+function buildUiPayloadFromCheck(check) {
+  if (!check) {
+    return null;
+  }
+  return {
+    amount: check.amount,
+    currency: check.currency,
+    merchant: check.operator,
+    card: check.card_last4,
+    date: check.date_display,
+    time: check.time_display,
+    check_id: check.check_id,
+  };
+}
+
+async function processSingleMessage({ record, chatId, messageId, rawText }) {
+  let text = (rawText ?? record?.text ?? '').trim();
+
+  if (!text) {
+    const fetched = await fetchMessageTextFromUserbot(chatId, messageId);
+    if (fetched) {
+      text = fetched.trim();
+    }
+  }
+
+  if (!text) {
+    throw Object.assign(new Error('Message has no text'), { code: 'NO_TEXT', status: 422 });
+  }
+
+  const notifyMessageId = await notifier.notifyReceived({
+    txId: record?.id || 'pending',
+    source: 'telegram_userbot',
+    raw: text,
+    operator: record?.data?.operator,
+    last4: record?.data?.card,
+    amount: record?.data?.amount || '—',
+    currency: record?.data?.currency || '',
+    datetime: record?.timestamp || new Date().toISOString()
+  }).catch((error) => {
+    console.warn('notifyReceived(userbot) failed:', error.message);
+    return null;
+  });
+
+  let result;
+  try {
+    result = await parserService.parseAndInsert(text, {
+      explicit: 'telegram_userbot',
+      addedVia: 'bot',
+      metadata: {
+        chat_id: chatId,
+        message_id: messageId,
+        record_id: record?.id,
+        bot_id: record?.bot_id,
+      },
+      sourceChatId: chatId,
+      sourceMessageId: messageId,
+      notifyMessageId,
+    });
+  } catch (error) {
+    if (!error.notifyMessageId && notifyMessageId) {
+      error.notifyMessageId = notifyMessageId;
+    }
+    throw error;
+  }
+
+  const primaryCheck = result.primary || result.created?.[0] || null;
+
+  if (notifyMessageId && primaryCheck) {
+    await notifier.notifyProcessed({
+      notifyMessageId,
+      txId: primaryCheck.check_id,
+      amount: primaryCheck.amount,
+      currency: primaryCheck.currency,
+      type: primaryCheck.transaction_type,
+      category: primaryCheck.category,
+      comment: primaryCheck.comment,
+    }).catch((error) => {
+      console.warn('notifyProcessed(userbot) failed:', error.message);
+    });
+  }
+
+  return { result, primaryCheck, notifyMessageId };
+}
+
 router.post('/process', async (req, res) => {
   try {
-    const { messageId } = req.body;
+    const body = req.body || {};
+    const recordId = body.record_id || body.message_uuid || body.messageId || null;
+    const rawChatId = body.chat_id ?? body.chatId ?? body.bot_id;
+    const rawMessageId = body.message_id ?? body.telegram_message_id ?? body.telegramMessageId;
+    const rawText = body.raw_text ?? body.text ?? '';
 
-    if (!messageId) {
+    const chatId = rawChatId != null ? String(rawChatId).trim() : null;
+    const messageId = rawMessageId != null ? String(rawMessageId).trim() : null;
+
+    if (!chatId || !messageId) {
       return res.status(400).json({
         success: false,
-        error: 'messageId is required'
+        code: 'BAD_REQUEST',
+        detail: 'chat_id and message_id are required'
       });
     }
 
-    // Получить сообщение
-    const message = await BotMessage.getById(messageId);
-    if (!message) {
+    const record = await resolveMessageRecord({ recordId, chatId, messageId });
+    if (!record) {
       return res.status(404).json({
         success: false,
-        error: 'Message not found'
+        code: 'NOT_FOUND',
+        detail: 'Message not found'
       });
     }
 
-    // Обновить статус на pending
-    await BotMessage.updateStatus(messageId, 'pending');
+    await BotMessage.updateStatus(record.id, 'pending');
 
-    // Попытка парсинга через парсер сервис
     try {
-      const parsedData = await parserService.parseReceipt(message.text);
+      console.log(`📥 Processing userbot message id=${record.id}, chat=${chatId}, message=${messageId}`);
+      const startedAt = Date.now();
 
-      if (parsedData && parsedData.datetime) {
-        // Успешно распарсено - обновить data и статус
-        await BotMessage.updateData(messageId, parsedData);
-        await BotMessage.updateStatus(messageId, 'processed', {
-          sheet_url: null // TODO: добавить ссылку на Google Sheets когда будет интеграция
-        });
-
-        res.json({
-          success: true,
-          message: 'Message processed successfully',
-          data: parsedData
-        });
-      } else {
-        // Не удалось распарсить
-        await BotMessage.updateStatus(messageId, 'error', {
-          error: 'Failed to parse receipt data'
-        });
-
-        res.status(400).json({
-          success: false,
-          error: 'Failed to parse receipt data'
-        });
-      }
-    } catch (parseError) {
-      // Ошибка парсинга
-      await BotMessage.updateStatus(messageId, 'error', {
-        error: parseError.message
+      const { result, primaryCheck } = await processSingleMessage({
+        record,
+        chatId,
+        messageId,
+        rawText
       });
 
-      res.status(500).json({
+      const duration = Date.now() - startedAt;
+      console.log(`⏱ userbot message ${record.id} processed in ${duration}ms`);
+
+      if (primaryCheck) {
+        const uiData = buildUiPayloadFromCheck(primaryCheck);
+        if (uiData) {
+          await BotMessage.updateData(record.id, uiData);
+        }
+      }
+
+      await BotMessage.updateStatus(record.id, 'processed', {
+        sheet_url: null
+      });
+
+      return res.json({
+        success: true,
+        data: result.created,
+        duplicates: result.duplicates,
+        requestId: result.requestId,
+        message: 'Message processed successfully'
+      });
+    } catch (error) {
+      const code = error.code || error.meta?.code || 'PROCESS_FAILED';
+      const status = error.status || (code === 'DUPLICATE' ? 200 : code === 'NO_TEXT' ? 422 : 500);
+      const detail = error.message || 'Failed to process message';
+
+      console.error(`💥 userbot process failed for record ${record.id}:`, detail);
+
+      await BotMessage.updateStatus(record.id, 'error', {
+        error: `${code}: ${detail}`
+      });
+
+      if (error.notifyMessageId) {
+        await notifier.notifyError({
+          notifyMessageId: error.notifyMessageId,
+          txId: record.id,
+          code,
+          detail
+        }).catch((notifyErr) => {
+          console.warn('notifyError(userbot) failed:', notifyErr.message);
+        });
+      }
+
+      if (code === 'DUPLICATE') {
+        return res.status(200).json({
+          success: true,
+          status: 'duplicate',
+          code,
+          detail,
+          duplicates: error.meta?.duplicates || []
+        });
+      }
+
+      return res.status(status).json({
         success: false,
-        error: parseError.message
+        code,
+        detail,
+        requestId: error.meta?.requestId
       });
     }
   } catch (error) {
-    console.error('Error processing message:', error);
+    console.error('Error processing userbot message:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      code: 'UNEXPECTED',
+      detail: error.message
     });
   }
 });
@@ -218,67 +387,93 @@ router.post('/process', async (req, res) => {
  */
 router.post('/process-multiple', async (req, res) => {
   try {
-    const { messageIds } = req.body;
+    const { messages } = req.body;
 
-    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+    if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'messageIds array is required'
+        code: 'BAD_REQUEST',
+        detail: 'messages array is required'
       });
     }
 
-    // Обновить все сообщения в статус pending
-    await BotMessage.updateMultipleStatuses(messageIds, 'pending');
-
-    // Обработать каждое сообщение
-    const results = {
+    const summary = {
       success: 0,
       failed: 0,
+      duplicates: 0,
       errors: []
     };
 
-    for (const messageId of messageIds) {
+    for (const item of messages) {
+      const recordId = item.record_id || item.id || item.message_uuid;
+      const chatId = item.chat_id || item.chatId;
+      const messageId = item.message_id || item.messageId || item.telegram_message_id;
+      const rawText = item.raw_text || item.text;
+
       try {
-        const message = await BotMessage.getById(messageId);
-        if (!message) {
-          results.failed++;
-          results.errors.push({ messageId, error: 'Message not found' });
+        const record = await resolveMessageRecord({
+          recordId,
+          chatId: chatId ? String(chatId) : null,
+          messageId: messageId ? String(messageId) : null
+        });
+
+        if (!record) {
+          summary.failed += 1;
+          summary.errors.push({ recordId, code: 'NOT_FOUND', detail: 'Message not found' });
           continue;
         }
 
-        // Парсинг
-        const parsedData = await parserService.parseReceipt(message.text);
+        await BotMessage.updateStatus(record.id, 'pending');
 
-        if (parsedData && parsedData.datetime) {
-          await BotMessage.updateData(messageId, parsedData);
-          await BotMessage.updateStatus(messageId, 'processed');
-          results.success++;
-        } else {
-          await BotMessage.updateStatus(messageId, 'error', {
-            error: 'Failed to parse'
+        try {
+          await processSingleMessage({
+            record,
+            chatId: String(chatId ?? record.chat_id),
+            messageId: String(messageId ?? record.message_id),
+            rawText
           });
-          results.failed++;
-          results.errors.push({ messageId, error: 'Failed to parse' });
+
+          await BotMessage.updateStatus(record.id, 'processed');
+          summary.success += 1;
+        } catch (processError) {
+          const code = processError.code || 'PROCESS_FAILED';
+          if (code === 'DUPLICATE') {
+            summary.duplicates += 1;
+          } else {
+            summary.failed += 1;
+          }
+          summary.errors.push({ recordId: record.id, code, detail: processError.message });
+          await BotMessage.updateStatus(record.id, 'error', {
+            error: `${code}: ${processError.message}`
+          });
+          if (processError.notifyMessageId) {
+            await notifier.notifyError({
+              notifyMessageId: processError.notifyMessageId,
+              txId: record.id,
+              code,
+              detail: processError.message
+            }).catch((notifyErr) => {
+              console.warn('notifyError(userbot multi) failed:', notifyErr.message);
+            });
+          }
         }
-      } catch (parseError) {
-        await BotMessage.updateStatus(messageId, 'error', {
-          error: parseError.message
-        });
-        results.failed++;
-        results.errors.push({ messageId, error: parseError.message });
+      } catch (loopError) {
+        summary.failed += 1;
+        summary.errors.push({ recordId, code: 'UNEXPECTED', detail: loopError.message });
       }
     }
 
     res.json({
       success: true,
-      message: `Processed ${results.success}/${messageIds.length} messages`,
-      data: results
+      data: summary,
+      message: `Processed ${summary.success}/${messages.length} messages`
     });
   } catch (error) {
     console.error('Error processing multiple messages:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      code: 'UNEXPECTED',
+      detail: error.message
     });
   }
 });
@@ -320,6 +515,72 @@ router.post('/retry', async (req, res) => {
     });
   } catch (error) {
     console.error('Error retrying message:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/userbot-chat/load-history/:botId
+ * Загрузить историю сообщений от бота через userbot
+ *
+ * Body: {days: number (optional)}
+ * days = null означает загрузить всю историю
+ * days = 30 означает загрузить за последние 30 дней
+ */
+router.post('/load-history/:botId', async (req, res) => {
+  try {
+    const { botId } = req.params;
+    const { days } = req.body;
+
+    // Получить информацию о боте
+    const bot = MONITORED_BOTS.find(b => b.id === parseInt(botId));
+
+    if (!bot) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bot not found'
+      });
+    }
+
+    console.log(`📥 Loading history for bot ${bot.name} (${bot.username}), days: ${days || 'all'}`);
+
+    // Вызвать userbot service для загрузки истории
+    const response = await fetch(`${USERBOT_SERVICE_URL}/load-history`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        bot_id: bot.id,
+        bot_username: bot.username,
+        days: days
+      })
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error || 'Failed to load history from userbot'
+      });
+    }
+
+    console.log(`✅ History loaded: ${result.loaded} messages, ${result.saved} saved`);
+
+    res.json({
+      success: true,
+      loaded: result.loaded,
+      saved: result.saved,
+      skipped: result.skipped,
+      errors: result.errors
+    });
+
+  } catch (error) {
+    console.error('Error loading history:', error);
     res.status(500).json({
       success: false,
       error: error.message

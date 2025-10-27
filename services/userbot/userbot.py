@@ -10,7 +10,7 @@ import requests
 import psycopg2
 from datetime import datetime
 from telethon import TelegramClient, events
-from telethon.tl.types import User
+from telethon.tl.types import User, PeerChannel, PeerChat, PeerUser
 import config
 
 
@@ -174,7 +174,7 @@ class UserbotManager:
         bot_names_list = []
         for bot_id in config.MONITOR_BOT_IDS:
             try:
-                bot_entity = await self.client.get_entity(bot_id)
+                bot_entity = await self.resolve_entity(bot_id)
                 bot_name = bot_entity.first_name or f"ID:{bot_id}"
                 bot_names_list.append(f"{bot_name} (@{bot_entity.username})")
             except Exception:
@@ -274,9 +274,17 @@ class UserbotManager:
             # Вставить сообщение со статусом 'unprocessed'
             cursor.execute(
                 """INSERT INTO bot_messages
-                   (bot_id, telegram_message_id, timestamp, text, status, process_attempts)
-                   VALUES (%s, %s, %s, %s, 'unprocessed', 0)""",
-                (bot_id, str(telegram_message_id), datetime.now(), text)
+                   (bot_id, telegram_message_id, chat_id, message_id, timestamp, text, status, process_attempts)
+                   VALUES (%s, %s, %s, %s, %s, %s, 'unprocessed', 0)
+                   ON CONFLICT (chat_id, message_id) DO NOTHING""",
+                (
+                    str(bot_id),
+                    str(telegram_message_id),
+                    str(bot_id),
+                    str(telegram_message_id),
+                    datetime.now(),
+                    text
+                )
             )
 
             self.db_conn.commit()
@@ -349,7 +357,7 @@ class UserbotManager:
         bot_names_list = []
         for bot_id in config.MONITOR_BOT_IDS:
             try:
-                bot_entity = await self.client.get_entity(bot_id)
+                bot_entity = await self.resolve_entity(bot_id)
                 bot_name = bot_entity.first_name or f"ID:{bot_id}"
                 bot_names_list.append(f"{bot_name} (@{bot_entity.username})")
             except Exception:
@@ -363,6 +371,105 @@ class UserbotManager:
         print("✅ Ожидание сообщений от банковских ботов...")
 
         await self.client.run_until_disconnected()
+
+    async def load_bot_history(self, bot_id: int, bot_username: str, days: int = None):
+        """
+        Загрузить историю сообщений от бота
+
+        Args:
+            bot_id: ID бота в БД
+            bot_username: Username бота (например, "@CardXabarBot")
+            days: Загрузить за последние N дней (None = вся история)
+
+        Returns:
+            {loaded: int, saved: int, skipped: int, errors: int}
+        """
+        from history_loader import HistoryLoader
+
+        if not self.client or not self.client.is_connected():
+            return {
+                'loaded': 0,
+                'saved': 0,
+                'skipped': 0,
+                'errors': 1,
+                'error_message': 'Userbot не подключен'
+            }
+
+        try:
+            loader = HistoryLoader(self.client)
+            result = await loader.load_bot_history(
+                bot_id=bot_id,
+                bot_username=bot_username,
+                days=days
+            )
+            loader.close()
+            return result
+
+        except Exception as e:
+            print(f"❌ Ошибка при загрузке истории: {e}")
+            return {
+                'loaded': 0,
+                'saved': 0,
+                'skipped': 0,
+                'errors': 1,
+                'error_message': str(e)
+            }
+
+    async def resolve_entity(self, identifier):
+        """
+        Универсальное получение сущности Telegram по строковому/числовому идентификатору
+        """
+        if identifier is None:
+            raise ValueError("identifier is required")
+
+        if isinstance(identifier, (int,)):
+            return await self.client.get_entity(identifier)
+
+        value = str(identifier)
+        if value.startswith('-100'):
+            return await self.client.get_entity(PeerChannel(int(value)))
+
+        if value.startswith('-') or value.isdigit():
+            try:
+                return await self.client.get_entity(int(value))
+            except Exception:
+                return await self.client.get_entity(PeerChat(int(value)))
+
+        if value.startswith('@'):
+            return await self.client.get_entity(value)
+
+        try:
+            return await self.client.get_entity(PeerUser(int(value)))
+        except Exception:
+            try:
+                return await self.client.get_entity(PeerChat(int(value)))
+            except Exception:
+                return await self.client.get_entity(value)
+
+    async def fetch_message_text(self, chat_id, message_id):
+        """Извлечь текст сообщения по chat/message id"""
+        if not self.client:
+            await self.initialize()
+
+        if not self.client.is_connected():
+            await self.client.connect()
+
+        entity = await self.resolve_entity(chat_id)
+
+        try:
+            target_id = int(str(message_id))
+        except ValueError:
+            target_id = message_id
+
+        message = await self.client.get_messages(entity, ids=target_id)
+        if not message:
+            raise ValueError('Message not found in Telegram history')
+
+        text = getattr(message, 'message', None) or getattr(message, 'raw_text', None) or ''
+        if not text:
+            raise ValueError('Message has no text content')
+
+        return text
 
 
 # Глобальный экземпляр userbot manager

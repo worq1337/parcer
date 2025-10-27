@@ -2,6 +2,7 @@ const pool = require('../config/database');
 const { detectSource, normalizeExplicitSource } = require('../utils/detectSource');
 const { resolveDateParts } = require('../utils/datetime');
 const { normalizeCardLast4 } = require('../utils/card');
+const { computeFingerprint } = require('../utils/fingerprint');
 
 class Check {
   /**
@@ -87,6 +88,20 @@ class Check {
   }
 
   /**
+   * Найти чек по отпечатку (fingerprint)
+   */
+  static async findByFingerprint(fingerprint) {
+    if (!fingerprint) {
+      return null;
+    }
+    const result = await pool.query(
+      'SELECT * FROM checks WHERE fingerprint = $1 LIMIT 1',
+      [fingerprint]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
    * Получить последние N чеков
    * patch-017 §1: для команды /last в Telegram боте
    */
@@ -143,19 +158,54 @@ class Check {
         : null;
 
     const rawTextValue = checkData.rawText ?? checkData.raw_text ?? null;
-    const metadataValue = checkData.metadata
-      ? typeof checkData.metadata === 'string'
-        ? checkData.metadata
-        : JSON.stringify(checkData.metadata)
-      : null;
+    let metadataValue = null;
+    let metadataObject = null;
+    if (checkData.metadata) {
+      if (typeof checkData.metadata === 'string') {
+        metadataValue = checkData.metadata;
+        try {
+          metadataObject = JSON.parse(checkData.metadata);
+        } catch (error) {
+          metadataObject = null;
+        }
+      } else {
+        metadataObject = checkData.metadata;
+        metadataValue = JSON.stringify(checkData.metadata);
+      }
+    }
+
+    const sourceChatId =
+      checkData.sourceChatId ||
+      checkData.source_chat_id ||
+      metadataObject?.chat_id ||
+      null;
+    const sourceMessageId =
+      checkData.sourceMessageId ||
+      checkData.source_message_id ||
+      metadataObject?.message_id ||
+      metadataObject?.telegram_message_id ||
+      null;
+    const notifyMessageId =
+      checkData.notifyMessageId ||
+      checkData.notify_message_id ||
+      null;
+
+    const fingerprint = computeFingerprint({
+      datetime: dateParts.datetimeForDb,
+      amount: amountValue,
+      cardLast4,
+      operator: checkData.operator,
+      transactionType: checkData.transactionType,
+    });
 
     const query = `
       INSERT INTO checks (
         datetime, weekday, date_display, time_display,
         operator, app, amount, balance, card_last4,
         is_p2p, transaction_type, currency,
-        source, raw_text, metadata, added_via
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        source, raw_text, metadata, added_via,
+        source_chat_id, source_message_id, notify_message_id, fingerprint
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *
     `;
 
@@ -175,11 +225,25 @@ class Check {
       resolvedSource,
       rawTextValue,
       metadataValue,
-      checkData.addedVia || 'manual'
+      checkData.addedVia || 'manual',
+      sourceChatId,
+      sourceMessageId,
+      notifyMessageId,
+      fingerprint,
     ];
 
-    const result = await pool.query(query, values);
-    return result.rows[0];
+    try {
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    } catch (error) {
+      if (error?.code === '23505' && error?.constraint === 'idx_checks_fingerprint_unique' && fingerprint) {
+        const existing = await this.findByFingerprint(fingerprint);
+        if (existing) {
+          return existing;
+        }
+      }
+      throw error;
+    }
   }
 
   /**
@@ -251,12 +315,52 @@ class Check {
       pick(checkData.raw_text, currentCheck.raw_text)
     );
 
-    const nextMetadata = pick(checkData.metadata, currentCheck.metadata);
-    const metadataValue = nextMetadata
-      ? typeof nextMetadata === 'string'
-        ? nextMetadata
-        : JSON.stringify(nextMetadata)
-      : null;
+    const nextMetadataRaw = pick(checkData.metadata, currentCheck.metadata);
+    let metadataValue = null;
+    let metadataObject = null;
+    if (nextMetadataRaw) {
+      if (typeof nextMetadataRaw === 'string') {
+        metadataValue = nextMetadataRaw;
+        try {
+          metadataObject = JSON.parse(nextMetadataRaw);
+        } catch (error) {
+          metadataObject = null;
+        }
+      } else {
+        metadataObject = nextMetadataRaw;
+        metadataValue = JSON.stringify(nextMetadataRaw);
+      }
+    }
+
+    const nextOperator = pick(checkData.operator, currentCheck.operator);
+    const nextTransactionType = pick(checkData.transactionType, currentCheck.transaction_type);
+
+    const nextSourceChatId = pick(
+      checkData.sourceChatId,
+      pick(checkData.source_chat_id, currentCheck.source_chat_id || metadataObject?.chat_id || null)
+    );
+    const nextSourceMessageId = pick(
+      checkData.sourceMessageId,
+      pick(
+        checkData.source_message_id,
+        currentCheck.source_message_id ||
+          metadataObject?.message_id ||
+          metadataObject?.telegram_message_id ||
+          null
+      )
+    );
+    const nextNotifyMessageId = pick(
+      checkData.notifyMessageId,
+      pick(checkData.notify_message_id, currentCheck.notify_message_id || null)
+    );
+
+    const nextFingerprint = computeFingerprint({
+      datetime: nextDateParts.datetimeForDb,
+      amount: nextAmount,
+      cardLast4: nextCardLast4,
+      operator: nextOperator,
+      transactionType: nextTransactionType,
+    }) || currentCheck.fingerprint;
 
     const updatedSourceExplicit = normalizeExplicitSource(
       pick(checkData.source, currentCheck.source)
@@ -281,7 +385,11 @@ class Check {
       currency: pick(checkData.currency, currentCheck.currency),
       source: resolvedSource,
       rawText: nextRawText,
-      metadata: metadataValue
+      metadata: metadataValue,
+      sourceChatId: nextSourceChatId,
+      sourceMessageId: nextSourceMessageId,
+      notifyMessageId: nextNotifyMessageId,
+      fingerprint: nextFingerprint,
     };
 
     const query = `
@@ -289,8 +397,10 @@ class Check {
         datetime = $1, weekday = $2, date_display = $3, time_display = $4,
         operator = $5, app = $6, amount = $7, balance = $8, card_last4 = $9,
         is_p2p = $10, transaction_type = $11, currency = $12,
-        source = $13, raw_text = $14, metadata = $15
-      WHERE id = $16
+        source = $13, raw_text = $14, metadata = $15,
+        source_chat_id = $16, source_message_id = $17,
+        notify_message_id = $18, fingerprint = $19
+      WHERE id = $20
       RETURNING *
     `;
 
@@ -312,11 +422,25 @@ class Check {
       updatedData.source,
       updatedData.rawText,
       updatedData.metadata,
+      updatedData.sourceChatId,
+      updatedData.sourceMessageId,
+      updatedData.notifyMessageId,
+      updatedData.fingerprint,
       targetId
     ];
 
-    const result = await pool.query(query, values);
-    return result.rows[0];
+    try {
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    } catch (error) {
+      if (error?.code === '23505' && error?.constraint === 'idx_checks_fingerprint_unique' && updatedData.fingerprint) {
+        const existing = await this.findByFingerprint(updatedData.fingerprint);
+        if (existing) {
+          return existing;
+        }
+      }
+      throw error;
+    }
   }
 
   /**
@@ -331,14 +455,29 @@ class Check {
    * Проверить существование дубликата
    * patch-008: также проверяет поле is_duplicate
    */
-  static async checkDuplicate(cardLast4, datetime, amount) {
-    const normalizedCard = normalizeCardLast4(cardLast4);
+  static async checkDuplicate(payload = {}) {
+    const normalizedCard = normalizeCardLast4(payload.cardLast4 || payload.card_last4);
     if (!normalizedCard) {
       return null;
     }
 
-    const normalizedDate = resolveDateParts(datetime).datetimeForDb;
-    const normalizedAmount = Number(amount);
+    const fingerprint = computeFingerprint({
+      datetime: payload.datetime,
+      amount: payload.amount,
+      cardLast4: normalizedCard,
+      operator: payload.operator,
+      transactionType: payload.transactionType,
+    });
+
+    if (fingerprint) {
+      const existingByFingerprint = await this.findByFingerprint(fingerprint);
+      if (existingByFingerprint) {
+        return existingByFingerprint;
+      }
+    }
+
+    const normalizedDate = resolveDateParts(payload.datetime).datetimeForDb;
+    const normalizedAmount = Number(payload.amount);
     if (!Number.isFinite(normalizedAmount)) {
       return null;
     }
@@ -346,12 +485,15 @@ class Check {
     const query = `
       SELECT * FROM checks
       WHERE card_last4 = $1
-      AND datetime = $2
+      AND datetime BETWEEN ($2::timestamp - INTERVAL '60 seconds') AND ($2::timestamp + INTERVAL '60 seconds')
       AND ABS(amount) = ABS($3)
       AND is_duplicate = false
       LIMIT 1
     `;
-    const result = await pool.query(query, [normalizedCard, normalizedDate, normalizedAmount]);
+    const result = await pool.query(
+      query,
+      [normalizedCard, normalizedDate, normalizedAmount]
+    );
     return result.rows[0];
   }
 
@@ -384,11 +526,13 @@ class Check {
 
       for (const checkData of checksData) {
         // Проверка на дубликат
-        const duplicate = await this.checkDuplicate(
-          checkData.cardLast4,
-          checkData.datetime,
-          checkData.amount
-        );
+        const duplicate = await this.checkDuplicate({
+          cardLast4: checkData.cardLast4 || checkData.card_last4,
+          datetime: checkData.datetime,
+          amount: checkData.amount,
+          operator: checkData.operator,
+          transactionType: checkData.transactionType,
+        });
 
         if (duplicate) {
           duplicates.push(checkData);

@@ -96,10 +96,22 @@ export const useUserbotChat = () => {
   /**
    * Process single message
    */
-  const processMessage = useCallback(async (messageId) => {
+  const processMessage = useCallback(async (message) => {
     try {
-      await userbotChatService.processMessage(messageId);
-      toast.success('Сообщение обработано');
+      if (!message) {
+        toast.error('Сообщение не выбрано');
+        return;
+      }
+
+      const payload = {
+        recordId: message.id,
+        chatId: message.chat_id || message.bot_id || selectedBotId,
+        messageId: message.message_id || message.telegram_message_id,
+        rawText: message.text
+      };
+
+      const response = await userbotChatService.processMessage(payload);
+      toast.success(response.message || 'Сообщение обработано');
 
       // Refresh messages after processing
       await refresh();
@@ -108,16 +120,34 @@ export const useUserbotChat = () => {
       await loadBots();
     } catch (error) {
       console.error('Error processing message:', error);
-      toast.error(error.response?.data?.error || 'Ошибка обработки');
+      const detail = error.response?.data?.detail || error.response?.data?.error || error.message;
+      const requestId = error.response?.data?.requestId;
+      const composed = requestId ? `${detail} (requestId: ${requestId})` : detail;
+      toast.error(composed || 'Ошибка обработки');
     }
-  }, [refresh, loadBots]);
+  }, [refresh, loadBots, selectedBotId]);
 
   /**
    * Process multiple messages in bulk
    */
   const processMultiple = useCallback(async (messageIds) => {
     try {
-      const result = await userbotChatService.processMultiple(messageIds);
+      if (!messageIds || messageIds.length === 0) {
+        toast.info('Выберите сообщения для обработки');
+        return;
+      }
+
+      const payloadMessages = messages
+        .filter(msg => messageIds.includes(msg.id))
+        .map(msg => ({
+          id: msg.id,
+          recordId: msg.id,
+          chatId: msg.chat_id || msg.bot_id || selectedBotId,
+          messageId: msg.message_id || msg.telegram_message_id,
+          rawText: msg.text
+        }));
+
+      const result = await userbotChatService.processMultiple(payloadMessages);
 
       if (result.data.success > 0) {
         toast.success(`Обработано ${result.data.success} из ${messageIds.length}`);
@@ -137,7 +167,7 @@ export const useUserbotChat = () => {
       console.error('Error bulk processing:', error);
       toast.error('Ошибка массовой обработки');
     }
-  }, [refresh, loadBots]);
+  }, [refresh, loadBots, messages, selectedBotId]);
 
   /**
    * Retry failed message

@@ -9,6 +9,7 @@ const { isAllowedFileType, isAllowedFileSize, sanitizeForLogging } = require('..
 const eventBus = require('../utils/eventBus'); // patch-017 §5
 const ocrFallbackService = require('../services/ocrFallbackService');
 const { normalizeExplicitSource, detectSource } = require('../utils/detectSource');
+const notifier = require('../services/telegramNotifier');
 
 // patch-017 §2: URL OCR сервиса с учётом окружения (Docker / локально)
 const resolveOcrServiceUrl = () => {
@@ -67,10 +68,9 @@ router.post('/text', async (req, res) => {
     } = req.body;
 
     const explicitNormalized = normalizeExplicitSource(explicit || rawSource);
-    const tgMeta = message_id ? { messageId: Number(message_id) } : null;
+    const tgMeta = message_id ? { messageId: String(message_id) } : null;
     const addedVia = explicitNormalized === 'manual' ? 'manual' : 'bot';
 
-    // Валидация
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return res.status(400).json({
         success: false,
@@ -79,143 +79,183 @@ router.post('/text', async (req, res) => {
       });
     }
 
-    // Парсинг текста
-    const parseResult = await parserService.parseReceipt(text, {
-      explicit: explicitNormalized,
-      tgMeta,
-      addedVia,
-    });
+    let notifyMessageId = null;
+    try {
+      notifyMessageId = await notifier.notifyReceived({
+        txId: 'pending',
+        source: explicitNormalized || 'ingest-text',
+        raw: text,
+        amount: '0',
+        currency: '',
+        operator: '',
+        last4: '',
+        datetime: new Date().toISOString()
+      });
+    } catch (notifyError) {
+      console.warn('notifyReceived failed:', notifyError.message);
+    }
 
-    if (!parseResult.success) {
+    const metadata = (chat_id || message_id || user_id)
+      ? {
+          chat_id: chat_id || null,
+          message_id: message_id || null,
+          user_id: user_id || null
+        }
+      : {};
+
+    let insertResult;
+    try {
+      insertResult = await parserService.parseAndInsert(text, {
+        explicit: explicitNormalized,
+        tgMeta,
+        addedVia,
+        metadata,
+        sourceChatId: chat_id,
+        sourceMessageId: message_id,
+        notifyMessageId
+      });
+    } catch (parseError) {
+      if (notifyMessageId) {
+        await notifier.notifyError({
+          notifyMessageId,
+          txId: 'pending',
+          code: parseError.code || 'PARSE_FAILED',
+          detail: parseError.message
+        }).catch(() => {});
+      }
+
+      const duplicates = parseError.meta?.duplicates || [];
+
+      if (parseError.code === 'DUPLICATE') {
+        const duplicateSummaries = duplicates.map((dup) => ({
+          id: dup.id,
+          check_id: dup.check_id,
+          datetime: dup.datetime,
+          amount: dup.amount,
+          currency: dup.currency,
+          operator: dup.operator,
+          card_last4: dup.card_last4
+        }));
+
+        for (const duplicate of duplicates) {
+          await logQueueEvent(
+            duplicate.check_id,
+            'duplicate_checked',
+            normalizeQueueSource(explicitNormalized || duplicate.source || 'manual'),
+            {
+              status: 'warning',
+              message: 'Duplicate detected via ingest API',
+              metadata
+            }
+          );
+        }
+
+        return res.status(200).json({
+          success: true,
+          status: 'duplicate',
+          message: 'Чек уже существует',
+          duplicates: duplicateSummaries
+        });
+      }
+
       await logQueueEvent(
         null,
         'parse_failed',
         normalizeQueueSource(explicitNormalized || undefined),
         {
           status: 'error',
-          message: parseResult.error || 'Failed to parse receipt',
-          metadata: { chat_id, message_id, user_id }
+          message: parseError.message || 'Failed to parse receipt',
+          metadata
         }
       );
 
       return res.status(422).json({
         success: false,
         status: 'error',
-        error: parseResult.error || 'Не удалось распознать чек',
-        message: 'Проверьте формат сообщения'
+        error: parseError.message || 'Не удалось распознать чек',
+        code: parseError.code || 'PARSE_FAILED'
       });
     }
 
-    const detectedSource = parseResult.source || detectSource({ explicit: explicitNormalized, tgMeta, text });
+    const createdChecks = insertResult.created || [];
+    const duplicates = insertResult.duplicates || [];
+    const primaryCheck = insertResult.primary || createdChecks[0];
+
+    const detectedSource = primaryCheck?.source || detectSource({
+      explicit: explicitNormalized,
+      tgMeta,
+      text
+    });
     const detectedSourceKey = detectedSource ? String(detectedSource).toLowerCase() : 'manual';
 
-    const parsedItems = Array.isArray(parseResult.data) ? parseResult.data : [parseResult.data];
-    const hasMeta = Boolean(chat_id || message_id || user_id);
+    const duplicateSummaries = duplicates.map((dup, index) => ({
+      id: dup.id,
+      check_id: dup.check_id,
+      datetime: dup.datetime,
+      amount: dup.amount,
+      currency: dup.currency,
+      operator: dup.operator,
+      card_last4: dup.card_last4,
+      ingest_index: index
+    }));
 
-    const createdChecks = [];
-    const duplicateSummaries = [];
-
-    for (const [index, rawItem] of parsedItems.entries()) {
-      const payload = {
-        ...rawItem,
-        source: rawItem.source || detectedSource,
-      };
-
-      if (!payload.addedVia) {
-        payload.addedVia = explicitNormalized === 'manual' ? 'manual' : 'bot';
-      }
-
-      if (!payload.rawText && text) {
-        payload.rawText = text;
-      }
-
-      if (hasMeta) {
-        payload.metadata = {
-          ...(payload.metadata || {}),
-          chat_id: chat_id || null,
-          message_id: message_id || null,
-          user_id: user_id || null,
-          ingest_index: index,
-        };
-      }
-
-      const duplicate = await Check.checkDuplicate(
-        payload.cardLast4 || payload.card_last4,
-        payload.datetime,
-        Math.abs(Number(payload.amount))
-      );
-
-      if (duplicate) {
-        await logQueueEvent(
-          duplicate.check_id,
-          'duplicate_checked',
-          normalizeQueueSource(payload.source || detectedSourceKey),
-          {
-            status: 'warning',
-            message: 'Duplicate detected',
-            metadata: { chat_id, message_id, user_id, ingest_index: index }
-          }
-        );
-
-        duplicateSummaries.push({
-          id: duplicate.id,
-          check_id: duplicate.check_id,
-          datetime: duplicate.datetime,
-          amount: duplicate.amount,
-          currency: duplicate.currency,
-          operator: duplicate.operator,
-          card_last4: duplicate.card_last4
-        });
-        continue;
-      }
-
-      const newCheck = await Check.create(payload);
-
+    for (const duplicate of duplicates) {
       await logQueueEvent(
-        newCheck.check_id,
+        duplicate.check_id,
+        'duplicate_checked',
+        normalizeQueueSource(duplicate.source || detectedSourceKey),
+        {
+          status: 'warning',
+          message: 'Duplicate detected via ingest API',
+          metadata
+        }
+      );
+    }
+
+    const createdSummaries = createdChecks.map((check, index) => ({
+      id: check.id,
+      check_id: check.check_id,
+      datetime: check.datetime,
+      amount: check.amount,
+      currency: check.currency,
+      operator: check.operator,
+      card_last4: check.card_last4,
+      date_display: check.date_display,
+      time_display: check.time_display,
+      ingest_index: index
+    }));
+
+    for (const [index, created] of createdChecks.entries()) {
+      await logQueueEvent(
+        created.check_id,
         'saved',
-        normalizeQueueSource((payload.source || detectedSourceKey)),
+        normalizeQueueSource(created.source || detectedSourceKey),
         {
           status: 'ok',
           message: 'Check saved via ingest API',
-          metadata: { chat_id, message_id, user_id, ingest_index: index }
+          metadata: { ...metadata, ingest_index: index }
         }
       );
-
-      eventBus.emitCheckAdded(newCheck, payload.source || detectedSource);
-
-      createdChecks.push({
-        id: newCheck.id,
-        check_id: newCheck.check_id,
-        datetime: newCheck.datetime,
-        amount: newCheck.amount,
-        currency: newCheck.currency,
-        operator: newCheck.operator,
-        card_last4: newCheck.card_last4,
-        date_display: newCheck.date_display,
-        time_display: newCheck.time_display
-      });
     }
 
-    if (createdChecks.length === 0) {
-      return res.status(200).json({
-        success: true,
-        status: 'duplicate',
-        message: 'Все операции уже существуют',
-        duplicates: duplicateSummaries
-      });
+    if (notifyMessageId && primaryCheck) {
+      await notifier.notifyProcessed({
+        notifyMessageId,
+        txId: primaryCheck.check_id,
+        amount: primaryCheck.amount,
+        currency: primaryCheck.currency,
+        type: primaryCheck.transaction_type,
+        category: primaryCheck.category,
+        comment: primaryCheck.comment
+      }).catch(() => {});
     }
 
     const status = duplicateSummaries.length > 0 ? 'partial' : 'saved';
-    const message = duplicateSummaries.length > 0
-      ? `Добавлено ${createdChecks.length}, дубликатов: ${duplicateSummaries.length}`
-      : 'Чек успешно добавлен';
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       status,
-      message,
-      data: createdChecks,
+      data: createdSummaries,
       duplicates: duplicateSummaries
     });
 
@@ -505,11 +545,13 @@ router.post('/image', async (req, res) => {
     const detectedSourceKey = detectedSource.toLowerCase();
 
     // Проверка на дубликат
-    const duplicate = await Check.checkDuplicate(
-      checkData.card_last4,
-      checkData.datetime,
-      Math.abs(checkData.amount)
-    );
+    const duplicate = await Check.checkDuplicate({
+      cardLast4: checkData.cardLast4 || checkData.card_last4,
+      datetime: checkData.datetime,
+      amount: Math.abs(checkData.amount),
+      operator: checkData.operator,
+      transactionType: checkData.transaction_type || checkData.transactionType,
+    });
 
     if (duplicate) {
       await logQueueEvent(
@@ -717,11 +759,13 @@ router.post('/sms', async (req, res) => {
       };
 
       // Проверка на дубликат
-      const duplicate = await Check.checkDuplicate(
-        payload.cardLast4 || payload.card_last4,
-        payload.datetime,
-        Math.abs(Number(payload.amount))
-      );
+      const duplicate = await Check.checkDuplicate({
+        cardLast4: payload.cardLast4 || payload.card_last4,
+        datetime: payload.datetime,
+        amount: Math.abs(Number(payload.amount)),
+        operator: payload.operator,
+        transactionType: payload.transactionType,
+      });
 
       if (duplicate) {
         await logQueueEvent(

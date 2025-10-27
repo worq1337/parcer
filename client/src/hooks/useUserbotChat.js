@@ -105,8 +105,8 @@ export const useUserbotChat = () => {
 
       const payload = {
         recordId: message.id,
-        chatId: message.chat_id || message.bot_id || selectedBotId,
-        messageId: message.message_id || message.telegram_message_id,
+        chatId: message.bot_id || selectedBotId,
+        messageId: message.telegram_message_id,
         rawText: message.text
       };
 
@@ -142,8 +142,8 @@ export const useUserbotChat = () => {
         .map(msg => ({
           id: msg.id,
           recordId: msg.id,
-          chatId: msg.chat_id || msg.bot_id || selectedBotId,
-          messageId: msg.message_id || msg.telegram_message_id,
+          chatId: msg.bot_id || selectedBotId,
+          messageId: msg.telegram_message_id,
           rawText: msg.text
         }));
 

@@ -203,6 +203,15 @@ const CheckDetailsModal = ({ check, onClose, onOpenInTable }) => {
             </div>
           </div>
 
+          {(check.source_bot_username || check.source_chat_id) && (
+            <div className="detail-item">
+              <label>Бот</label>
+              <div className="detail-value">
+                {check.source_bot_username ? `@${check.source_bot_username}` : (check.source_chat_id || '—')}
+              </div>
+            </div>
+          )}
+
           <div className="detail-item">
             <label>Способ добавления</label>
             <div className="detail-value">

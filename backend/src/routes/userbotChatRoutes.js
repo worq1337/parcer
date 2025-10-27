@@ -8,6 +8,8 @@ const router = express.Router();
 const BotMessage = require('../models/BotMessage');
 const parserService = require('../services/parserService');
 const notifier = require('../services/telegramNotifier');
+const userbotService = require('../services/userbotService');
+const USERBOT_SERVICE_URL = process.env.USERBOT_SERVICE_URL || 'http://userbot:5001';
 
 // Конфигурация мониторимых ботов
 const MONITORED_BOTS = [
@@ -142,34 +144,6 @@ router.get('/history/:botId', async (req, res) => {
  *   "messageId": "uuid"
  * }
  */
-const USERBOT_SERVICE_URL = process.env.USERBOT_SERVICE_URL || 'http://userbot:5001';
-
-async function fetchMessageTextFromUserbot(chatId, messageId) {
-  try {
-    const response = await fetch(`${USERBOT_SERVICE_URL}/message-text`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId
-      })
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    if (!data.success) {
-      return null;
-    }
-    return typeof data.text === 'string' ? data.text : null;
-  } catch (error) {
-    console.warn('fetchMessageTextFromUserbot failed:', error.message);
-    return null;
-  }
-}
-
 async function resolveMessageRecord({ recordId, chatId, messageId }) {
   let record = null;
   if (recordId) {
@@ -193,6 +167,10 @@ function buildUiPayloadFromCheck(check) {
     date: check.date_display,
     time: check.time_display,
     check_id: check.check_id,
+    source_bot_username: check.source_bot_username,
+    source_bot_title: check.source_bot_title,
+    source_chat_id: check.source_chat_id,
+    source_message_id: check.source_message_id,
   };
 }
 
@@ -200,9 +178,13 @@ async function processSingleMessage({ record, chatId, messageId, rawText }) {
   let text = (rawText ?? record?.text ?? '').trim();
 
   if (!text) {
-    const fetched = await fetchMessageTextFromUserbot(chatId, messageId);
-    if (fetched) {
-      text = fetched.trim();
+    try {
+      const fetched = await userbotService.getMessageText(chatId, messageId);
+      if (fetched) {
+        text = fetched.trim();
+      }
+    } catch (error) {
+      console.warn('getMessageText failed:', error.message);
     }
   }
 
@@ -225,6 +207,13 @@ async function processSingleMessage({ record, chatId, messageId, rawText }) {
   });
 
   let result;
+  let chatMeta = {};
+  try {
+    chatMeta = await userbotService.getChatMeta(chatId);
+  } catch (error) {
+    console.warn('getChatMeta failed:', error.message);
+  }
+
   try {
     result = await parserService.parseAndInsert(text, {
       explicit: 'telegram_userbot',
@@ -234,9 +223,14 @@ async function processSingleMessage({ record, chatId, messageId, rawText }) {
         message_id: messageId,
         record_id: record?.id,
         bot_id: record?.bot_id,
+        bot_username: chatMeta?.username || record?.bot_username,
+        bot_title: chatMeta?.title || record?.bot_title,
       },
       sourceChatId: chatId,
       sourceMessageId: messageId,
+      sourceBotUsername: chatMeta?.username || record?.bot_username,
+      sourceBotTitle: chatMeta?.title || record?.bot_title,
+      sourceApp: 'telegram_userbot',
       notifyMessageId,
     });
   } catch (error) {
@@ -251,12 +245,7 @@ async function processSingleMessage({ record, chatId, messageId, rawText }) {
   if (notifyMessageId && primaryCheck) {
     await notifier.notifyProcessed({
       notifyMessageId,
-      txId: primaryCheck.check_id,
-      amount: primaryCheck.amount,
-      currency: primaryCheck.currency,
-      type: primaryCheck.transaction_type,
-      category: primaryCheck.category,
-      comment: primaryCheck.comment,
+      tx: primaryCheck
     }).catch((error) => {
       console.warn('notifyProcessed(userbot) failed:', error.message);
     });
@@ -268,19 +257,22 @@ async function processSingleMessage({ record, chatId, messageId, rawText }) {
 router.post('/process', async (req, res) => {
   try {
     const body = req.body || {};
-    const recordId = body.record_id || body.message_uuid || body.messageId || null;
-    const rawChatId = body.chat_id ?? body.chatId ?? body.bot_id;
-    const rawMessageId = body.message_id ?? body.telegram_message_id ?? body.telegramMessageId;
-    const rawText = body.raw_text ?? body.text ?? '';
+
+    const recordId = body.record_id || body.message_uuid || body.messageId || body.recordId || null;
+    const rawChatId = body.chat_id ?? body.chatId ?? body.bot_id ?? body.botId;
+    const rawMessageId = body.message_id ?? body.messageId ?? body.telegram_message_id ?? body.telegramMessageId;
+    const rawText = body.raw_text ?? body.rawText ?? body.text ?? '';
 
     const chatId = rawChatId != null ? String(rawChatId).trim() : null;
     const messageId = rawMessageId != null ? String(rawMessageId).trim() : null;
 
     if (!chatId || !messageId) {
+      console.log(`❌ Missing data: chatId=${chatId}, messageId=${messageId}`);
       return res.status(400).json({
         success: false,
+        error: 'messageId is required',
         code: 'BAD_REQUEST',
-        detail: 'chat_id and message_id are required'
+        detail: `chat_id (${chatId}) and message_id (${messageId}) are required. Received: ${JSON.stringify(body)}`
       });
     }
 

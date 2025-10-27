@@ -189,6 +189,21 @@ class Check {
       checkData.notifyMessageId ||
       checkData.notify_message_id ||
       null;
+    const sourceBotUsername =
+      checkData.sourceBotUsername ||
+      checkData.source_bot_username ||
+      metadataObject?.bot_username ||
+      null;
+    const sourceBotTitle =
+      checkData.sourceBotTitle ||
+      checkData.source_bot_title ||
+      metadataObject?.bot_title ||
+      null;
+    const sourceApp =
+      checkData.sourceApp ||
+      checkData.source_app ||
+      explicitNormalized ||
+      null;
 
     const fingerprint = computeFingerprint({
       datetime: dateParts.datetimeForDb,
@@ -204,8 +219,9 @@ class Check {
         operator, app, amount, balance, card_last4,
         is_p2p, transaction_type, currency,
         source, raw_text, metadata, added_via,
-        source_chat_id, source_message_id, notify_message_id, fingerprint
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        source_chat_id, source_message_id, source_bot_username, source_bot_title,
+        source_app, notify_message_id, fingerprint
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       RETURNING *
     `;
 
@@ -228,6 +244,9 @@ class Check {
       checkData.addedVia || 'manual',
       sourceChatId,
       sourceMessageId,
+      sourceBotUsername,
+      sourceBotTitle,
+      sourceApp,
       notifyMessageId,
       fingerprint,
     ];
@@ -353,6 +372,18 @@ class Check {
       checkData.notifyMessageId,
       pick(checkData.notify_message_id, currentCheck.notify_message_id || null)
     );
+    const nextSourceBotUsername = pick(
+      checkData.sourceBotUsername,
+      pick(checkData.source_bot_username, currentCheck.source_bot_username || metadataObject?.bot_username || null)
+    );
+    const nextSourceBotTitle = pick(
+      checkData.sourceBotTitle,
+      pick(checkData.source_bot_title, currentCheck.source_bot_title || metadataObject?.bot_title || null)
+    );
+    const nextSourceApp = pick(
+      checkData.sourceApp,
+      pick(checkData.source_app, currentCheck.source_app || updatedSourceExplicit || null)
+    );
 
     const nextFingerprint = computeFingerprint({
       datetime: nextDateParts.datetimeForDb,
@@ -388,6 +419,9 @@ class Check {
       metadata: metadataValue,
       sourceChatId: nextSourceChatId,
       sourceMessageId: nextSourceMessageId,
+      sourceBotUsername: nextSourceBotUsername,
+      sourceBotTitle: nextSourceBotTitle,
+      sourceApp: nextSourceApp,
       notifyMessageId: nextNotifyMessageId,
       fingerprint: nextFingerprint,
     };
@@ -399,8 +433,9 @@ class Check {
         is_p2p = $10, transaction_type = $11, currency = $12,
         source = $13, raw_text = $14, metadata = $15,
         source_chat_id = $16, source_message_id = $17,
-        notify_message_id = $18, fingerprint = $19
-      WHERE id = $20
+        source_bot_username = $18, source_bot_title = $19,
+        source_app = $20, notify_message_id = $21, fingerprint = $22
+      WHERE id = $23
       RETURNING *
     `;
 
@@ -424,6 +459,9 @@ class Check {
       updatedData.metadata,
       updatedData.sourceChatId,
       updatedData.sourceMessageId,
+      updatedData.sourceBotUsername,
+      updatedData.sourceBotTitle,
+      updatedData.sourceApp,
       updatedData.notifyMessageId,
       updatedData.fingerprint,
       targetId

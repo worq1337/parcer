@@ -10,7 +10,8 @@ import requests
 import psycopg2
 from datetime import datetime
 from telethon import TelegramClient, events
-from telethon.tl.types import User, PeerChannel, PeerChat, PeerUser
+from telethon.tl.types import User, PeerChannel, PeerChat, PeerUser, Channel, Chat
+from telethon.tl.types import InputPeerUser, InputPeerChannel, InputPeerChat
 import config
 
 
@@ -416,35 +417,49 @@ class UserbotManager:
             }
 
     async def resolve_entity(self, identifier):
-        """
-        Универсальное получение сущности Telegram по строковому/числовому идентификатору
-        """
+        """Вернуть InputPeer для переданного идентификатора"""
         if identifier is None:
             raise ValueError("identifier is required")
 
         if isinstance(identifier, (int,)):
-            return await self.client.get_entity(identifier)
+            entity = await self.client.get_entity(identifier)
+            return self._to_input_peer(entity)
 
         value = str(identifier)
-        if value.startswith('-100'):
-            return await self.client.get_entity(PeerChannel(int(value)))
-
-        if value.startswith('-') or value.isdigit():
-            try:
-                return await self.client.get_entity(int(value))
-            except Exception:
-                return await self.client.get_entity(PeerChat(int(value)))
-
         if value.startswith('@'):
-            return await self.client.get_entity(value)
+            return await self.client.get_input_entity(value)
 
         try:
-            return await self.client.get_entity(PeerUser(int(value)))
+            numeric = int(value)
         except Exception:
-            try:
-                return await self.client.get_entity(PeerChat(int(value)))
-            except Exception:
-                return await self.client.get_entity(value)
+            entity = await self.client.get_entity(value)
+            return self._to_input_peer(entity)
+
+        if value.startswith('-100'):
+            entity = await self.client.get_entity(PeerChannel(numeric))
+            return InputPeerChannel(entity.id, entity.access_hash)
+
+        try:
+            entity = await self.client.get_entity(numeric)
+            return self._to_input_peer(entity)
+        except Exception:
+            entity = await self.client.get_entity(PeerChat(numeric))
+            return InputPeerChat(entity.id)
+
+    def _to_input_peer(self, entity):
+        if isinstance(entity, (Channel, PeerChannel)):
+            return InputPeerChannel(entity.id, entity.access_hash)
+        if isinstance(entity, (Chat, PeerChat)):
+            return InputPeerChat(entity.id)
+        if isinstance(entity, (User, PeerUser)) or getattr(entity, 'bot', False) or hasattr(entity, 'first_name'):
+            return InputPeerUser(entity.id, getattr(entity, 'access_hash', None))
+        # fallback для сущностей Telethon (Channel / User и т.п.)
+        if getattr(entity, 'access_hash', None) is not None:
+            # определим по типу
+            if getattr(entity, 'megagroup', False) or getattr(entity, 'broadcast', False):
+                return InputPeerChannel(entity.id, entity.access_hash)
+            return InputPeerUser(entity.id, entity.access_hash)
+        return InputPeerChat(entity.id)
 
     async def fetch_message_text(self, chat_id, message_id):
         """Извлечь текст сообщения по chat/message id"""
@@ -470,6 +485,25 @@ class UserbotManager:
             raise ValueError('Message has no text content')
 
         return text
+
+    async def get_chat_meta(self, chat_id):
+        if not self.client:
+            await self.initialize()
+
+        if not self.client.is_connected():
+            await self.client.connect()
+
+        peer = await self.resolve_entity(chat_id)
+        entity = await self.client.get_entity(peer)
+
+        title = getattr(entity, 'title', None) or getattr(entity, 'first_name', None) or getattr(entity, 'last_name', None)
+
+        return {
+            'id': getattr(entity, 'id', None),
+            'username': getattr(entity, 'username', None),
+            'title': title,
+            'bot': getattr(entity, 'bot', False)
+        }
 
 
 # Глобальный экземпляр userbot manager

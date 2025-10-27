@@ -267,6 +267,37 @@ def message_text():
         }), 500
 
 
+@app.route('/chat-meta', methods=['POST'])
+def chat_meta():
+    try:
+        data = request.json or {}
+        chat_id = data.get('chat_id') or data.get('chatId')
+
+        if not chat_id:
+            return jsonify({
+                'success': False,
+                'error': 'chat_id обязателен'
+            }), 400
+
+        meta = run_async(userbot_manager.get_chat_meta(chat_id))
+
+        return jsonify({
+            'success': True,
+            'meta': meta
+        }), 200
+
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 404
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/load-history', methods=['POST'])
 def load_history():
     """

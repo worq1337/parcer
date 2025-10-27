@@ -30,27 +30,30 @@ export function useNotifications(enabled = true) {
       console.log('✅ SSE connection established');
     });
 
-    // Обработчик сообщений
-    eventSource.addEventListener('message', (event) => {
+    const handleTx = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('📨 SSE event received:', data.type);
+        checksCountRef.current++;
+        showCheckNotification(data);
+      } catch (error) {
+        console.error('Error parsing tx event:', error);
+      }
+    };
 
-        // Обработка события добавления чека
-        if (data.type === 'check:added') {
-          checksCountRef.current++;
-          showCheckNotification(data.data);
-        }
-
-        // Обработка минутной сводки
-        if (data.type === 'minute:summary') {
-          showMinuteSummary(data.data);
-          checksCountRef.current = 0; // Сброс счетчика
+    const handleLegacy = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'minute:summary') {
+          showMinuteSummary(payload.data);
+          checksCountRef.current = 0;
         }
       } catch (error) {
-        console.error('Error parsing SSE event:', error);
+        console.error('Error parsing legacy event:', error);
       }
-    });
+    };
+
+    eventSource.addEventListener('tx', handleTx);
+    eventSource.addEventListener('legacy', handleLegacy);
 
     // Обработчик ошибок
     eventSource.addEventListener('error', (error) => {
@@ -62,6 +65,8 @@ export function useNotifications(enabled = true) {
     return () => {
       console.log('🔌 Closing SSE connection');
       if (eventSourceRef.current) {
+        eventSourceRef.current.removeEventListener('tx', handleTx);
+        eventSourceRef.current.removeEventListener('legacy', handleLegacy);
         eventSourceRef.current.close();
       }
     };

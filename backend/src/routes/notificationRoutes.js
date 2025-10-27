@@ -1,79 +1,74 @@
-/**
- * patch-017 §5: SSE endpoint для OS уведомлений
- */
-
 const express = require('express');
+const { EventEmitter } = require('events');
 const router = express.Router();
-const eventBus = require('../utils/eventBus');
+const legacyBus = require('../utils/eventBus');
 
-// Хранилище активных SSE соединений
-const clients = new Set();
+const bus = new EventEmitter();
+const connections = new Set();
 
-/**
- * SSE endpoint для получения push-уведомлений
- * GET /api/notifications/stream
- */
+const emitTxEvent = (payload) => {
+  bus.emit('tx', payload);
+};
+
+legacyBus.on('check:added', (event) => {
+  bus.emit('legacy', { type: 'check:added', data: event.data || event });
+});
+
+legacyBus.on('minute:summary', (event) => {
+  bus.emit('legacy', { type: 'minute:summary', data: event.data || event });
+});
+
+legacyBus.on('error:occurred', (event) => {
+  bus.emit('legacy', { type: 'error:occurred', data: event.data || event });
+});
+
 router.get('/stream', (req, res) => {
-  // Настройка SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders?.();
 
-  // Отправить initial connection event
-  res.write('data: ' + JSON.stringify({ type: 'connected', message: 'SSE connection established' }) + '\n\n');
+  res.write('event: ready\n');
+  res.write('data: {}\n\n');
 
-  // Создать listener для этого клиента
-  const sendEvent = (event) => {
-    try {
-      res.write('data: ' + JSON.stringify(event) + '\n\n');
-    } catch (error) {
-      console.error('Error sending SSE event:', error);
-    }
+  const heartbeat = setInterval(() => {
+    res.write(': ping\n\n');
+  }, 15000);
+
+  const onTx = (payload) => {
+    res.write('event: tx\n');
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
   };
 
-  // Подписаться на все события
-  eventBus.on('check:added', sendEvent);
-  eventBus.on('minute:summary', sendEvent);
-  eventBus.on('error:occurred', sendEvent);
+  const onLegacy = (payload) => {
+    res.write('event: legacy\n');
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
 
-  // Добавить клиента в список
-  clients.add({ res, sendEvent });
+  bus.on('tx', onTx);
+  bus.on('legacy', onLegacy);
 
-  console.log(`SSE client connected (total: ${clients.size})`);
+  const connection = { res, onTx, onLegacy, heartbeat };
+  connections.add(connection);
 
-  // Heartbeat каждые 30 секунд
-  const heartbeat = setInterval(() => {
-    try {
-      res.write(': heartbeat\n\n');
-    } catch (error) {
-      clearInterval(heartbeat);
-    }
-  }, 30000);
-
-  // Обработка отключения клиента
   req.on('close', () => {
     clearInterval(heartbeat);
-    eventBus.off('check:added', sendEvent);
-    eventBus.off('minute:summary', sendEvent);
-    eventBus.off('error:occurred', sendEvent);
-    clients.delete({ res, sendEvent });
-    console.log(`SSE client disconnected (total: ${clients.size})`);
+    bus.off('tx', onTx);
+    bus.off('legacy', onLegacy);
+    connections.delete(connection);
   });
 });
 
-/**
- * Получить статистику активных подключений
- * GET /api/notifications/stats
- */
 router.get('/stats', (req, res) => {
   res.json({
     success: true,
     data: {
-      activeConnections: clients.size,
+      activeConnections: connections.size,
       timestamp: new Date().toISOString()
     }
   });
 });
+
+router.emitTxEvent = emitTxEvent;
 
 module.exports = router;

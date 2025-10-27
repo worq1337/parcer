@@ -36,6 +36,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bot_messages_chat_message_unique
 ALTER TABLE IF EXISTS checks
   ADD COLUMN IF NOT EXISTS source_chat_id TEXT,
   ADD COLUMN IF NOT EXISTS source_message_id TEXT,
+  ADD COLUMN IF NOT EXISTS source_bot_username TEXT,
+  ADD COLUMN IF NOT EXISTS source_bot_title TEXT,
+  ADD COLUMN IF NOT EXISTS source_app TEXT,
   ADD COLUMN IF NOT EXISTS notify_message_id TEXT,
   ADD COLUMN IF NOT EXISTS fingerprint TEXT;
 

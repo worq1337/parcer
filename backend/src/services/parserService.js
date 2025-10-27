@@ -6,6 +6,8 @@ const { detectSource } = require('../utils/detectSource');
 const { resolveDateParts } = require('../utils/datetime');
 const { normalizeCardLast4 } = require('../utils/card');
 const eventBus = require('../utils/eventBus');
+const notificationRoutes = require('../routes/notificationRoutes');
+const emitTxEvent = notificationRoutes.emitTxEvent || (() => {});
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-4o';
@@ -27,7 +29,7 @@ const JSON_SCHEMA = {
       balance: { type: ['number', 'null'] },
       meta: { type: 'object', additionalProperties: true }
     },
-    required: ['amount', 'currency', 'datetime_iso', 'transaction_type']
+    required: ['amount', 'currency', 'datetime_iso', 'transaction_type', 'operator', 'card_last4', 'balance', 'meta']
   },
   strict: true
 };
@@ -75,13 +77,16 @@ class ParserService {
       explicit: options.explicit,
       tgMeta: options.tgMeta,
       addedVia: options.addedVia || 'bot',
-      metadata: options.metadata || {},
-      sourceChatId: options.sourceChatId || options.chat_id || null,
-      sourceMessageId: options.sourceMessageId || options.message_id || null,
-      notifyMessageId: options.notifyMessageId || options.notify_message_id || null,
-      requestId
-    };
-  }
+    metadata: options.metadata || {},
+    sourceChatId: options.sourceChatId || options.chat_id || null,
+    sourceMessageId: options.sourceMessageId || options.message_id || null,
+    notifyMessageId: options.notifyMessageId || options.notify_message_id || null,
+    sourceBotUsername: options.sourceBotUsername || options.source_bot_username || null,
+    sourceBotTitle: options.sourceBotTitle || options.source_bot_title || null,
+    sourceApp: options.sourceApp || options.source_app || null,
+    requestId
+  };
+}
 
   toErrorResponse(error, context) {
     if (error instanceof ParserError) {
@@ -200,8 +205,7 @@ class ParserService {
       response_format: {
         type: 'json_schema',
         json_schema: JSON_SCHEMA
-      },
-      timeout: 15000
+      }
     };
 
     let completion;
@@ -352,7 +356,10 @@ class ParserService {
         },
         source_chat_id: context.sourceChatId,
         source_message_id: context.sourceMessageId,
-        notify_message_id: context.notifyMessageId
+        notify_message_id: context.notifyMessageId,
+        source_bot_username: tx.source_bot_username || context.sourceBotUsername,
+        source_bot_title: tx.source_bot_title || context.sourceBotTitle,
+        source_app: tx.source_app || context.sourceApp || context.source
       };
 
       const duplicate = await Check.checkDuplicate({
@@ -368,9 +375,28 @@ class ParserService {
         continue;
       }
 
-      const newCheck = await Check.create(payload);
+      const payloadWithSource = {
+        ...payload,
+        sourceBotUsername: payload.source_bot_username || payload.sourceBotUsername,
+        sourceBotTitle: payload.source_bot_title || payload.sourceBotTitle,
+        sourceApp: payload.source_app || payload.sourceApp || context.source || null
+      };
+
+      const newCheck = await Check.create(payloadWithSource);
       created.push(newCheck);
       eventBus.emitCheckAdded(newCheck, payload.source || context.source);
+      emitTxEvent({
+        id: newCheck.id,
+        check_id: newCheck.check_id,
+        amount: newCheck.amount,
+        currency: newCheck.currency,
+        datetime: newCheck.datetime,
+        operator: newCheck.operator,
+        source: newCheck.source,
+        card_last4: newCheck.card_last4,
+        source_bot_username: newCheck.source_bot_username,
+        source_chat_id: newCheck.source_chat_id
+      });
     }
 
     if (created.length === 0) {
@@ -433,8 +459,7 @@ datetime, transactionType, amount, isIncome, currency, cardLast4, operator, bala
       model: IMAGE_MODEL,
       messages,
       response_format: { type: 'json_object' },
-      temperature: 0,
-      timeout: 20000
+      temperature: 0
     };
 
     const completion = await this.createCompletion(requestBody);

@@ -83,22 +83,76 @@ async function notifyReceived({
   return response?.result?.message_id || null;
 }
 
-async function notifyProcessed({
-  notifyMessageId,
-  txId,
-  amount,
-  currency,
-  type,
-  category,
-  comment
-}) {
-  const html =
-    `✅ <b>Обработано</b>\n` +
-    `Сумма: <code>${amount} ${escapeHtml(currency || '')}</code>\n` +
-    `Тип: <code>${escapeHtml(type || '—')}</code>\n` +
-    `Категория: <code>${escapeHtml(category || '—')}</code>\n` +
-    `Комментарий: <code>${escapeHtml(comment || '—')}</code>\n` +
-    `#${escapeHtml(txId || 'pending')}`;
+function fmtType(raw = '') {
+  const map = {
+    debit: 'Списание',
+    credit: 'Зачисление',
+    p2p: 'Перевод',
+    fee: 'Комиссия',
+    refund: 'Возврат'
+  };
+  const value = String(raw || '').toLowerCase();
+  return map[value] || raw || '—';
+}
+
+function fmtAmount(value) {
+  const num = Number(value);
+  if (Number.isNaN(num)) {
+    return '—';
+  }
+  return num.toFixed(2);
+}
+
+function fmtDate(iso) {
+  if (!iso) {
+    return '—';
+  }
+  try {
+    return new Date(iso).toISOString().replace('T', ' ').slice(0, 19);
+  } catch (error) {
+    return iso;
+  }
+}
+
+async function notifyProcessed({ notifyMessageId, tx }) {
+  if (!tx) {
+    return;
+  }
+
+  const lines = [
+    '✅ <b>Обработано</b>',
+    `Сумма: <code>${fmtAmount(tx.amount)} ${escapeHtml(tx.currency || '')}</code>`,
+    `Тип: <code>${escapeHtml(fmtType(tx.transaction_type || tx.type))}</code>`
+  ];
+
+  if (tx.operator) {
+    lines.push(`Оператор: <code>${escapeHtml(tx.operator)}</code>`);
+  }
+
+  if (tx.card_last4 || tx.cardLast4) {
+    const last4 = tx.card_last4 || tx.cardLast4;
+    lines.push(`Карта: <code>•••• ${escapeHtml(last4)}</code>`);
+  }
+
+  const datetime = tx.datetime || tx.datetime_utc || tx.datetime_iso;
+  if (datetime) {
+    lines.push(`Время: <code>${escapeHtml(fmtDate(datetime))}</code>`);
+  }
+
+  if (tx.source || tx.source_app) {
+    lines.push(`Источник: <code>${escapeHtml(tx.source || tx.source_app)}</code>`);
+  }
+
+  const botRef = tx.source_bot_username
+    ? `@${tx.source_bot_username}`
+    : (tx.source_chat_id || tx.sourceChatId);
+  if (botRef) {
+    lines.push(`Чат: <code>${escapeHtml(botRef)}</code>`);
+  }
+
+  lines.push('', `#${escapeHtml(tx.check_id || tx.id || 'pending')}`);
+
+  const html = lines.join('\n');
 
   if (notifyMessageId) {
     await callTelegram('editMessageText', {

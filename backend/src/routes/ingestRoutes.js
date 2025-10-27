@@ -112,6 +112,7 @@ router.post('/text', async (req, res) => {
         metadata,
         sourceChatId: chat_id,
         sourceMessageId: message_id,
+        sourceApp: explicitNormalized || rawSource || addedVia,
         notifyMessageId
       });
     } catch (parseError) {
@@ -241,12 +242,7 @@ router.post('/text', async (req, res) => {
     if (notifyMessageId && primaryCheck) {
       await notifier.notifyProcessed({
         notifyMessageId,
-        txId: primaryCheck.check_id,
-        amount: primaryCheck.amount,
-        currency: primaryCheck.currency,
-        type: primaryCheck.transaction_type,
-        category: primaryCheck.category,
-        comment: primaryCheck.comment
+        tx: primaryCheck
       }).catch(() => {});
     }
 

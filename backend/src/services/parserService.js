@@ -8,11 +8,123 @@ const { normalizeCardLast4 } = require('../utils/card');
 const eventBus = require('../utils/eventBus');
 const notificationRoutes = require('../routes/notificationRoutes');
 const emitTxEvent = notificationRoutes.emitTxEvent || (() => {});
+const { getClient: getLLMClient } = require('./llmClientPool');
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-4o';
 const MAX_ATTEMPTS = 3;
 const BACKOFF_BASE_MS = 400;
+
+const stripCodeFences = (value) =>
+  value
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
+
+function repairJsonString(raw) {
+  return stripCodeFences(raw)
+    .replace(/\r?\n/g, ' ')
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+}
+
+function safeParseJson(raw) {
+  if (typeof raw !== 'string') {
+    throw new ParserError('LLM_JSON_PARSE_ERROR', 'Модель вернула пустой ответ', { raw });
+  }
+  const attempts = [
+    () => JSON.parse(raw),
+    () => JSON.parse(stripCodeFences(raw)),
+    () => JSON.parse(repairJsonString(raw))
+  ];
+  for (const attempt of attempts) {
+    try {
+      return attempt();
+    } catch (error) {
+      // try next
+    }
+  }
+  throw new ParserError('LLM_JSON_PARSE_ERROR', 'Модель вернула некорректный JSON', { raw });
+}
+
+function validateTransactionPayload(input) {
+  if (!input || typeof input !== 'object') {
+    throw new ParserError('LLM_JSON_INVALID', 'JSON не является объектом');
+  }
+
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount)) {
+    throw new ParserError('AMOUNT_INVALID', 'Поле amount отсутствует или некорректно');
+  }
+
+  const currency = String(input.currency || '').trim().toUpperCase();
+  if (!currency) {
+    throw new ParserError('CURRENCY_INVALID', 'Поле currency отсутствует');
+  }
+
+  const datetimeCandidate =
+    input.datetime_iso || input.datetimeIso || input.datetime || input.date || null;
+  const datetimeIso = datetimeCandidate ? String(datetimeCandidate).trim() : '';
+  const parsedDate = datetimeIso ? new Date(datetimeIso) : null;
+  if (!datetimeIso || !parsedDate || Number.isNaN(parsedDate.valueOf())) {
+    throw new ParserError('DATETIME_INVALID', 'Поле datetime_iso отсутствует или некорректно');
+  }
+
+  const rawTransactionType = input.transaction_type || input.transactionType;
+  const transactionType = rawTransactionType ? String(rawTransactionType).trim().toLowerCase() : '';
+  if (!transactionType) {
+    throw new ParserError('TRANSACTION_TYPE_INVALID', 'Поле transaction_type отсутствует');
+  }
+
+  const operator = String(input.operator || '').trim();
+
+  const rawCard = input.card_last4 || input.cardLast4 || input.card || '';
+  const cardLast4 = normalizeCardLast4(String(rawCard));
+  if (!cardLast4) {
+    throw new ParserError('CARD_LAST4_INVALID', 'Поле card_last4 отсутствует или некорректно');
+  }
+
+  const balanceRaw = input.balance;
+  let balance = null;
+  if (balanceRaw !== undefined && balanceRaw !== null && balanceRaw !== '') {
+    const numericBalance = Number(balanceRaw);
+    if (!Number.isFinite(numericBalance)) {
+      throw new ParserError('BALANCE_INVALID', 'Поле balance некорректно');
+    }
+    balance = numericBalance;
+  }
+
+  let meta = {};
+  if (Array.isArray(input.meta)) {
+    const resultMeta = {};
+    input.meta.forEach((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return;
+      }
+      const key = entry.key != null ? String(entry.key).trim() : '';
+      if (!key) {
+        return;
+      }
+      const value = entry.value;
+      resultMeta[key] = value;
+    });
+    meta = resultMeta;
+  } else if (input.meta && typeof input.meta === 'object') {
+    meta = { ...input.meta };
+  }
+
+  return {
+    amount,
+    currency,
+    datetime_iso: new Date(parsedDate.toISOString()).toISOString(),
+    operator,
+    card_last4: cardLast4,
+    transaction_type: transactionType,
+    balance,
+    meta
+  };
+}
 
 const JSON_SCHEMA = {
   name: 'transaction_schema',
@@ -27,9 +139,28 @@ const JSON_SCHEMA = {
       card_last4: { type: 'string' },
       transaction_type: { type: 'string', enum: ['debit', 'credit', 'p2p', 'fee', 'refund'] },
       balance: { type: ['number', 'null'] },
-      meta: { type: 'object', additionalProperties: true }
+      meta: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            key: { type: 'string' },
+            value: {
+              oneOf: [
+                { type: 'string' },
+                { type: 'number' },
+                { type: 'integer' },
+                { type: 'boolean' },
+                { type: 'null' }
+              ]
+            }
+          },
+          required: ['key', 'value']
+        }
+      }
     },
-    required: ['amount', 'currency', 'datetime_iso', 'transaction_type', 'operator', 'card_last4', 'balance', 'meta']
+    required: ['amount', 'currency', 'datetime_iso', 'transaction_type', 'operator', 'card_last4', 'balance']
   },
   strict: true
 };
@@ -60,9 +191,8 @@ class ParserError extends Error {
 
 class ParserService {
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    // OpenAI клиенты теперь берутся из llmClientPool в зависимости от бота
+    // this.openai больше не используется
   }
 
   buildContext(rawText, options = {}, requestId) {
@@ -190,7 +320,7 @@ class ParserService {
     const messages = [
       {
         role: 'system',
-        content: 'Извлеки поля из банковского уведомления и верни строго JSON по схеме.'
+        content: 'Извлеки поля из банковского уведомления и верни строго JSON по схеме. Поле meta верни как массив объектов вида {"key": "<строка>", "value": "<значение>"}. Если дополнительных данных нет, верни пустой массив meta. Никакого текста вне JSON.'
       },
       {
         role: 'user',
@@ -210,7 +340,7 @@ class ParserService {
 
     let completion;
     try {
-      completion = await this.createCompletion(requestBody);
+      completion = await this.createCompletion(requestBody, { sourceBotUsername: context.sourceBotUsername });
     } catch (error) {
       if (this.isResponseFormatUnsupported(error)) {
         console.warn(`[ParserService] Model ${DEFAULT_MODEL} does not support json_schema. Retrying with json_object.`);
@@ -218,7 +348,7 @@ class ParserService {
           ...requestBody,
           response_format: { type: 'json_object' }
         };
-        completion = await this.createCompletion(fallbackBody, { allowFallback: false });
+        completion = await this.createCompletion(fallbackBody, { allowFallback: false, sourceBotUsername: context.sourceBotUsername });
       } else if (this.isRateLimitError(error)) {
         const retryAfter = this.extractRetryAfterSeconds(error);
         throw new ParserError(
@@ -243,24 +373,9 @@ class ParserService {
       });
     }
 
-    let data;
-    try {
-      data = JSON.parse(trimmed);
-    } catch (error) {
-      throw new ParserError('LLM_JSON_PARSE_ERROR', 'Модель вернула некорректный JSON', {
-        requestId: context.requestId,
-        raw: trimmed
-      });
-    }
-
-    if (typeof data.amount !== 'number' || !data.currency || !data.datetime_iso) {
-      throw new ParserError('LLM_JSON_INVALID', 'Некорректные данные в JSON от модели', {
-        requestId: context.requestId,
-        raw: data
-      });
-    }
-
-    return this.normalizeLlmPayload(data);
+    const parsed = safeParseJson(trimmed);
+    const validated = validateTransactionPayload(parsed);
+    return this.normalizeLlmPayload(validated);
   }
 
   normalizeLlmPayload(data) {
@@ -462,7 +577,7 @@ datetime, transactionType, amount, isIncome, currency, cardLast4, operator, bala
       temperature: 0
     };
 
-    const completion = await this.createCompletion(requestBody);
+    const completion = await this.createCompletion(requestBody, { sourceBotUsername: context.sourceBotUsername });
     const rawResponse = completion?.choices?.[0]?.message?.content || '';
     if (!rawResponse) {
       throw new ParserError('LLM_EMPTY', 'Модель не вернула результат', {
@@ -512,15 +627,17 @@ datetime, transactionType, amount, isIncome, currency, cardLast4, operator, bala
     };
   }
 
-  async createCompletion(body, options = { allowFallback: true }) {
+  async createCompletion(body, options = { allowFallback: true, sourceBotUsername: null }) {
     try {
-      return await this.runWithRetry(() => this.openai.chat.completions.create(body));
+      // Получаем клиента для конкретного бота (или дефолтного)
+      const client = getLLMClient(options.sourceBotUsername);
+      return await this.runWithRetry(() => client.chat.completions.create(body));
     } catch (error) {
       if (options.allowFallback && this.isResponseFormatUnsupported(error) && body.response_format) {
         const fallbackBody = { ...body };
         delete fallbackBody.response_format;
         console.warn('[ParserService] response_format unsupported, retrying without it');
-        return this.createCompletion(fallbackBody, { allowFallback: false });
+        return this.createCompletion(fallbackBody, { allowFallback: false, sourceBotUsername: options.sourceBotUsername });
       }
       throw error;
     }

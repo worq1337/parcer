@@ -50,12 +50,14 @@ router.get('/stream', (req, res) => {
 
   const connection = { res, onTx, onLegacy, heartbeat };
   connections.add(connection);
+  console.log(`[sse] connection opened (active=${connections.size})`);
 
   req.on('close', () => {
     clearInterval(heartbeat);
     bus.off('tx', onTx);
     bus.off('legacy', onLegacy);
     connections.delete(connection);
+    console.log(`[sse] connection closed (active=${connections.size})`);
   });
 });
 
@@ -70,5 +72,6 @@ router.get('/stats', (req, res) => {
 });
 
 router.emitTxEvent = emitTxEvent;
+router.getActiveConnections = () => connections.size;
 
 module.exports = router;

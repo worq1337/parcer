@@ -156,7 +156,7 @@ class HistoryLoader:
                             """
                             INSERT INTO bot_messages
                             (bot_id, telegram_message_id, chat_id, message_id, timestamp, text, status, process_attempts)
-                            VALUES (%s, %s, %s, %s, %s, %s, 'unprocessed', 0)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'new', 0)
                             ON CONFLICT (chat_id, message_id) DO NOTHING
                             """,
                             (

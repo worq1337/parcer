@@ -3169,26 +3169,30 @@ const ChecksGrid = ({
             rowHeight={densitySettings.rowHeight}
             headerHeight={densitySettings.rowHeight + 8}
             // Настройки производительности (§10)
-            rowBuffer={50}
-            suppressRowVirtualisation={false}
+            rowBuffer={10}
+            immutableData={true}
+            deltaRowDataMode={true}
+            asyncTransactionWaitMillis={50}
+            suppressAnimationFrame={true}
+            suppressRowTransform={true}
             cellSelection={true}
             rowSelection="multiple"
             suppressRowClickSelection={true}
-            // Редактирование (patch-007 §1: F2/двойной клик)
-            singleClickEdit={false}
+          // Редактирование (patch-007 §1: F2/двойной клик)
+          singleClickEdit={false}
             stopEditingWhenCellsLoseFocus={true}
             enterNavigatesVertically={true}
             enterNavigatesVerticallyAfterEdit={true}
             // patch-007 §5: Drag-and-drop колонок
             suppressDragLeaveHidesColumns={true}
             suppressMovableColumns={false}
-            // Анимации
-            animateRows={true}
-            // Другие опции
-            enableCellTextSelection={true}
-            ensureDomOrder={true}
-            suppressContextMenu={true}
-            enableFillHandle={false}
+          // Анимации
+          animateRows={false}
+          // Другие опции
+          enableCellTextSelection={true}
+          ensureDomOrder={false}
+          suppressContextMenu={true}
+          enableFillHandle={false}
           />
 
           {/* patch-010 §1,2,4: Новое меню колонки */}

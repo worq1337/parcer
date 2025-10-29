@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../styles/SplashScreen.css';
+import AppVersionBadge from './AppVersionBadge';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -13,6 +14,7 @@ const SplashScreen = ({ onReady }) => {
   const [status, setStatus] = useState('checking'); // checking, compatible, incompatible, error
   const [compatInfo, setCompatInfo] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [appMeta, setAppMeta] = useState({ version: '1.0.0', build: '' });
 
   useEffect(() => {
     checkCompatibility();
@@ -20,8 +22,20 @@ const SplashScreen = ({ onReady }) => {
 
   const checkCompatibility = async () => {
     try {
-      // Получаем версию приложения
-      const appVersion = window.electron?.appVersion || '1.0.0';
+      let meta = null;
+      try {
+        meta = window.appInfo?.getMeta ? await window.appInfo.getMeta() : null;
+      } catch (metaError) {
+        console.error('Ошибка получения метаданных приложения:', metaError);
+      }
+      if (meta) {
+        setAppMeta({
+          version: meta.version || '1.0.0',
+          build: meta.build || ''
+        });
+      }
+
+      const appVersion = meta?.version || '1.0.0';
 
       // Проверяем совместимость с сервером
       const response = await axios.get(`${API_URL}/compat`, {
@@ -172,7 +186,7 @@ const SplashScreen = ({ onReady }) => {
 
         {/* Версия приложения */}
         <div className="splash-version">
-          Версия {window.electron?.appVersion || '1.0.0'}
+          Версия <AppVersionBadge className="splash-version-badge" />
         </div>
       </div>
     </div>

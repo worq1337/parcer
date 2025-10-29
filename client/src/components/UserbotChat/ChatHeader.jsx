@@ -64,7 +64,7 @@ const ChatHeader = ({ bot, onRefresh, refreshing }) => {
   }
 
   const totalMessages = bot.stats
-    ? bot.stats.processed + bot.stats.unprocessed + bot.stats.error + bot.stats.pending
+    ? (bot.stats.processed || 0) + (bot.stats.new || 0) + (bot.stats.error || 0) + (bot.stats.processing || 0)
     : 0;
 
   return (

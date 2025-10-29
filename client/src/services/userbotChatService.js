@@ -45,16 +45,32 @@ export const getBots = async () => {
  * @returns {Promise<object>} Messages with pagination info
  */
 export const getMessages = async (botId, options = {}) => {
-  const { status = 'all', limit = 50, offset = 0 } = options;
+  const {
+    status = 'all',
+    limit = 50,
+    offset = 0,
+    before
+  } = options;
 
   const params = new URLSearchParams({
     status,
-    limit: limit.toString(),
-    offset: offset.toString()
+    limit: String(limit)
   });
 
+  if (before) {
+    params.append('before_message_id', before);
+  } else {
+    params.append('offset', String(offset));
+  }
+
   const response = await api.get(`/messages/${botId}?${params.toString()}`);
-  return response.data.data;
+  const payload = response.data?.data || {};
+  return {
+    messages: payload.messages || [],
+    total: payload.total ?? null,
+    hasMore: Boolean(payload.hasMore),
+    nextCursor: payload.nextCursor || null
+  };
 };
 
 /**
@@ -66,7 +82,13 @@ export const getMessages = async (botId, options = {}) => {
 export const getHistory = async (botId, status = 'all') => {
   const params = new URLSearchParams({ status });
   const response = await api.get(`/history/${botId}?${params.toString()}`);
-  return response.data.data;
+  const payload = response.data?.data || {};
+  return {
+    messages: payload.messages || [],
+    total: payload.total ?? null,
+    hasMore: payload.hasMore ?? false,
+    nextCursor: payload.nextCursor || null
+  };
 };
 
 /**

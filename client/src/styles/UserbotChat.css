@@ -122,7 +122,12 @@
   color: var(--color-text-secondary);
 }
 
-.bot-stat.unprocessed {
+.bot-stat.new {
+  background: var(--status-info-bg);
+  color: var(--status-info);
+}
+
+.bot-stat.processing {
   background: var(--status-warning-bg);
   color: var(--status-warning);
 }
@@ -313,14 +318,14 @@
   gap: 4px;
 }
 
-.message-status-badge.unprocessed {
-  background: var(--status-warning-bg);
-  color: var(--status-warning);
-}
-
-.message-status-badge.pending {
+.message-status-badge.new {
   background: var(--status-info-bg);
   color: var(--status-info);
+}
+
+.message-status-badge.processing {
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
 }
 
 .message-status-badge.processed {
@@ -403,6 +408,29 @@
   margin-top: 12px;
 }
 
+.message-status-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--status-warning);
+}
+
+.messages-load-more {
+  padding: 12px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.messages-inline-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  padding: 12px 0;
+}
+
 /* Bulk Actions Bar */
 .bulk-actions-bar {
   padding: 12px 16px;
@@ -471,6 +499,13 @@
   height: 40px;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
+}
+
+.loading-spinner.small {
+  width: 16px;
+  height: 16px;
+  margin-bottom: 0;
+  border-width: 2px;
 }
 
 @keyframes spin {

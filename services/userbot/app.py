@@ -10,6 +10,7 @@ API для управления Telethon userbot:
 """
 
 import asyncio
+import os
 import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -39,7 +40,6 @@ def run_userbot_loop():
 # Запускаем event loop в фоновом потоке при старте приложения
 userbot_thread = threading.Thread(target=run_userbot_loop, daemon=True)
 userbot_thread.start()
-
 
 def run_async(coro):
     """
@@ -264,6 +264,42 @@ def message_text():
         return jsonify({
             'success': False,
             'error': str(e)
+        }), 500
+
+
+@app.route('/messages', methods=['GET'])
+def fetch_messages():
+    try:
+        chat_id = request.args.get('chat_id') or request.args.get('chatId')
+        limit = int(request.args.get('limit', 50))
+        before = request.args.get('before_message_id') or request.args.get('beforeMessageId')
+
+        if not chat_id:
+            return jsonify({
+                'success': False,
+                'error': 'chat_id is required'
+            }), 400
+
+        messages = run_async(
+            userbot_manager.get_messages(chat_id, limit=limit, before_message_id=before)
+        )
+
+        next_cursor = messages[-1]['message_id'] if messages else None
+
+        return jsonify({
+            'success': True,
+            'messages': messages,
+            'nextCursor': next_cursor
+        }), 200
+    except ValueError as exc:
+        return jsonify({
+            'success': False,
+            'error': str(exc)
+        }), 400
+    except Exception as exc:
+        return jsonify({
+            'success': False,
+            'error': str(exc)
         }), 500
 
 

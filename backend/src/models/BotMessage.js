@@ -5,20 +5,58 @@
 
 const pool = require('../config/database');
 
+const STATUS_ALIASES = {
+  unprocessed: 'new',
+  pending: 'processing'
+};
+
+const normalizeStatus = (status) => STATUS_ALIASES[status] || status;
+
+const statusFilterValues = (status) => {
+  if (!status || status === 'all') {
+    return null;
+  }
+  if (status === 'new') {
+    return ['new', 'unprocessed'];
+  }
+  if (status === 'processing') {
+    return ['processing', 'pending'];
+  }
+  return [status];
+};
+
 class BotMessage {
   /**
    * Получить все сообщения от конкретного бота
    * @param {number} botId - ID бота
    * @param {object} options - Опции фильтрации
-   * @param {string} options.status - Фильтр по статусу (unprocessed, processed, pending, error)
+   * @param {string} options.status - Фильтр по статусу (new, processed, processing, error)
    * @param {number} options.limit - Количество сообщений
    * @param {number} options.offset - Смещение для пагинации
    * @returns {Promise<{messages: Array, total: number, hasMore: boolean}>}
    */
   static async getByBotId(botId, options = {}) {
-    const { status, limit = 50, offset = 0 } = options;
+    const {
+      status,
+      limit = 50,
+      offset = 0,
+      beforeMessageId
+    } = options;
     const chatId = String(botId);
 
+    let beforeTimestamp = null;
+    if (beforeMessageId) {
+      const anchor = await pool.query(
+        'SELECT timestamp FROM bot_messages WHERE chat_id = $1 AND message_id = $2 LIMIT 1',
+        [chatId, String(beforeMessageId)]
+      );
+      if (anchor.rows[0]?.timestamp) {
+        beforeTimestamp = anchor.rows[0].timestamp;
+      }
+    }
+
+    const params = [chatId];
+    const statusValues = statusFilterValues(status);
     let query = `
       SELECT
         id,
@@ -39,37 +77,55 @@ class BotMessage {
       WHERE chat_id = $1
     `;
 
-    const params = [chatId];
-
-    // Добавляем фильтр по статусу если указан
-    if (status && status !== 'all') {
-      query += ` AND status = $${params.length + 1}`;
-      params.push(status);
+    if (statusValues) {
+      query += ` AND status = ANY($${params.length + 1}::text[])`;
+      params.push(statusValues);
     }
 
-    // Сортировка: новые сверху
-    query += ` ORDER BY timestamp DESC`;
+    if (beforeTimestamp) {
+      query += ` AND timestamp < $${params.length + 1}`;
+      params.push(beforeTimestamp);
+    }
 
-    // Пагинация
-    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(parseInt(limit), parseInt(offset));
+    query += ' ORDER BY timestamp DESC';
+
+    if (beforeTimestamp) {
+      query += ` LIMIT $${params.length + 1}`;
+      params.push(parseInt(limit, 10));
+    } else {
+      query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(parseInt(limit, 10), parseInt(offset, 10));
+    }
 
     const result = await pool.query(query, params);
+    const rows = result.rows.map((row) => ({
+      ...row,
+      status: normalizeStatus(row.status)
+    }));
 
-    // Подсчитать общее количество (для hasMore)
-    let countQuery = 'SELECT COUNT(*) as total FROM bot_messages WHERE chat_id = $1';
-    const countParams = [chatId];
-    if (status && status !== 'all') {
-      countQuery += ' AND status = $2';
-      countParams.push(status);
+    let total = null;
+    let hasMore = false;
+    if (!beforeTimestamp) {
+      let countQuery = 'SELECT COUNT(*) as total FROM bot_messages WHERE chat_id = $1';
+      const countParams = [chatId];
+      if (statusValues) {
+        countQuery += ' AND status = ANY($2::text[])';
+        countParams.push(statusValues);
+      }
+      const countResult = await pool.query(countQuery, countParams);
+      total = parseInt(countResult.rows[0].total, 10);
+      hasMore = offset + rows.length < total;
+    } else {
+      hasMore = rows.length === parseInt(limit, 10);
     }
-    const countResult = await pool.query(countQuery, countParams);
-    const total = parseInt(countResult.rows[0].total);
+
+    const nextCursor = rows.length ? rows[rows.length - 1].message_id : null;
 
     return {
-      messages: result.rows,
+      messages: rows,
       total,
-      hasMore: offset + result.rows.length < total
+      hasMore,
+      nextCursor
     };
   }
 
@@ -95,6 +151,33 @@ class BotMessage {
     return result.rows[0] || null;
   }
 
+  static async updateStatusByChatMessage(chatId, messageId, status, data = {}) {
+    const record = await this.findByChatAndMessage(chatId, messageId);
+    if (!record) {
+      return null;
+    }
+    return this.updateStatus(record.id, status, data);
+  }
+
+  static async linkToTransaction(chatId, messageId, transactionId) {
+    const record = await this.findByChatAndMessage(chatId, messageId);
+    if (!record) {
+      return null;
+    }
+
+    let payload = {};
+    if (record.data) {
+      try {
+        payload = typeof record.data === 'object' ? record.data : JSON.parse(record.data);
+      } catch (error) {
+        payload = {};
+      }
+    }
+
+    payload.tx_id = transactionId;
+    return this.updateData(record.id, payload);
+  }
+
   /**
    * Создать новое сообщение
    */
@@ -106,7 +189,7 @@ class BotMessage {
       message_id,
       timestamp,
       text,
-      status = 'unprocessed',
+      status = 'new',
       data = null,
       error = null
     } = messageData;
@@ -144,17 +227,18 @@ class BotMessage {
    */
   static async updateStatus(id, status, data = {}) {
     const { error = null, sheet_url = null } = data;
+    const attemptDelta = status === 'new' ? 0 : 1;
 
     const result = await pool.query(
       `UPDATE bot_messages
       SET status = $1,
           error = $2,
           sheet_url = $3,
-          process_attempts = process_attempts + 1,
+          process_attempts = process_attempts + $5,
           updated_at = NOW()
       WHERE id = $4
       RETURNING *`,
-      [status, error, sheet_url, id]
+      [status, error, sheet_url, id, attemptDelta]
     );
 
     return result.rows[0];
@@ -192,14 +276,15 @@ class BotMessage {
 
     const stats = {
       processed: 0,
-      pending: 0,
+      processing: 0,
       error: 0,
-      unprocessed: 0
+      new: 0
     };
 
-    result.rows.forEach(row => {
-      if (row.status in stats) {
-        stats[row.status] = parseInt(row.count);
+    result.rows.forEach((row) => {
+      const key = normalizeStatus(row.status);
+      if (stats[key] !== undefined) {
+        stats[key] = parseInt(row.count, 10);
       }
     });
 
@@ -213,7 +298,7 @@ class BotMessage {
     const result = await pool.query(
       `UPDATE bot_messages
       SET status = $1,
-          process_attempts = process_attempts + 1,
+          process_attempts = CASE WHEN $1 = 'new' THEN process_attempts ELSE process_attempts + 1 END,
           updated_at = NOW()
       WHERE id = ANY($2::uuid[])
       RETURNING id`,

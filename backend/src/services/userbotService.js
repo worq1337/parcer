@@ -52,7 +52,16 @@ async function getChatMeta(chatId) {
   return result.meta || {};
 }
 
+async function getStatus() {
+  try {
+    return await fetchJson('/status');
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   getMessageText,
-  getChatMeta
+  getChatMeta,
+  getStatus
 };

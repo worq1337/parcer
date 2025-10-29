@@ -4,6 +4,30 @@ const path = require('path');
 
 let mainWindow;
 
+if (process.env.ELECTRON_HW_ACCEL === 'off') {
+  app.disableHardwareAcceleration();
+}
+
+// ============ Single Instance Lock ============
+// Предотвращаем запуск нескольких копий приложения
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  // Другой экземпляр уже запущен, выходим
+  app.quit();
+} else {
+  // Обработчик для случая, когда пользователь пытается запустить второй экземпляр
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Фокусируем существующее окно
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
+    }
+  });
+}
+
 // ============ Auto-Updater Configuration ============
 // Настройка auto-updater для проверки обновлений
 autoUpdater.autoDownload = false; // Спрашивать перед скачиванием
@@ -20,6 +44,19 @@ autoUpdater.setFeedURL({
   repo: 'parcer',
 });
 
+ipcMain.handle('app:getMeta', () => {
+  return {
+    name: app.getName(),
+    version: app.getVersion(),
+    build: process.env.BUILD_SHA || 'dev',
+    builtAt: process.env.BUILD_DATE || new Date().toISOString()
+  };
+});
+
+// ============ Windows App User Model ID ============
+// Для правильного отображения в панели задач Windows
+app.setAppUserModelId(process.env.APP_ID || 'com.parcer.app');
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -27,6 +64,7 @@ function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     show: false, // Не показываем окно пока не загрузится контент
+    icon: path.join(__dirname, '..', 'build', 'icon.ico'), // Иконка для Windows
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -132,11 +170,13 @@ function createWindow() {
           label: 'О программе',
           click: () => {
             const { dialog } = require('electron');
+            const buildSha = (process.env.BUILD_SHA || '').toString();
+            const shortSha = buildSha ? ` (${buildSha.slice(0, 7)})` : '';
             dialog.showMessageBox(mainWindow, {
               type: 'info',
               title: 'О программе',
               message: 'Парсер банковских чеков',
-              detail: 'Версия 1.0.8\n\nСистема автоматического парсинга банковских транзакций из SMS и Telegram-уведомлений узбекских банков.'
+              detail: `Версия ${app.getVersion()}${shortSha}\n\nСистема автоматического парсинга банковских транзакций из SMS и Telegram-уведомлений узбекских банков.`
             });
           }
         }
@@ -171,6 +211,21 @@ app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
+});
+
+app.on('render-process-gone', (event, webContents, details) => {
+  console.error('[renderer gone]', details);
+  if (details.reason === 'crashed' || details.reason === 'oom' || details.reason === 'abnormal-exit') {
+    try {
+      webContents.reloadIgnoringCache();
+    } catch (error) {
+      console.error('Failed to reload crashed renderer', error);
+    }
+  }
+});
+
+app.on('child-process-gone', (event, details) => {
+  console.warn('[child gone]', details);
 });
 
 // ============ patch-017 §5: Notifications IPC Handlers ============

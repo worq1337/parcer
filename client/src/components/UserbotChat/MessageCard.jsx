@@ -82,7 +82,7 @@ const MessageCard = ({
       )}
 
       <div className="message-actions">
-        {message.status === 'unprocessed' && (
+        {message.status === 'new' && (
           <button
             className="btn btn-primary btn-sm"
             onClick={() => onProcess(message)}
@@ -90,6 +90,12 @@ const MessageCard = ({
             <Icon name="play_arrow" size={16} />
             Обработать
           </button>
+        )}
+        {message.status === 'processing' && (
+          <div className="message-status-note">
+            <Icon name="hourglass_empty" size={16} />
+            Обработка...
+          </div>
         )}
         {message.status === 'error' && (
           <button

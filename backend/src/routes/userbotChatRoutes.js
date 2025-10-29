@@ -18,12 +18,44 @@ const MONITORED_BOTS = [
   { id: 7028509569, name: 'NBU Card', username: '@NBUCard_bot', icon: '🏦' }
 ];
 
+const parseDataField = (value) => {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === 'object') {
+    return value;
+  }
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return null;
+  }
+};
+
+const toApiMessage = (row) => ({
+  id: row.id,
+  bot_id: row.bot_id,
+  telegram_message_id: row.telegram_message_id,
+  chat_id: row.chat_id,
+  message_id: row.message_id,
+  timestamp: row.timestamp,
+  status: row.status,
+  text: row.text,
+  data: parseDataField(row.data),
+  error: row.error,
+  sheet_url: row.sheet_url,
+  process_attempts: row.process_attempts,
+  created_at: row.created_at,
+  updated_at: row.updated_at
+});
+
 /**
  * GET /api/userbot-chat/bots
  * Получить список всех ботов со статистикой
  */
 router.get('/bots', async (req, res) => {
   try {
+    const requestId = req.requestId;
     // Получить статистику для каждого бота
     const botsWithStats = await Promise.all(
       MONITORED_BOTS.map(async (bot) => {
@@ -40,13 +72,15 @@ router.get('/bots', async (req, res) => {
 
     res.json({
       success: true,
-      data: botsWithStats
+      data: botsWithStats,
+      requestId
     });
   } catch (error) {
     console.error('Error getting bots:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      requestId: req.requestId
     });
   }
 });
@@ -56,44 +90,59 @@ router.get('/bots', async (req, res) => {
  * Получить сообщения от конкретного бота
  *
  * Query params:
- * - status: unprocessed | processed | pending | error | all
+ * - status: new | processed | processing | error | all
  * - limit: количество сообщений (по умолчанию 50)
  * - offset: смещение для пагинации (по умолчанию 0)
  */
 router.get('/messages/:botId', async (req, res) => {
   try {
     const { botId } = req.params;
-    const { status = 'all', limit = 50, offset = 0 } = req.query;
+    const {
+      status = 'all',
+      limit = 50,
+      offset = 0,
+      before_message_id,
+      beforeMessageId
+    } = req.query;
+    const requestId = req.requestId;
 
     // Проверить что бот существует
     const bot = MONITORED_BOTS.find(b => b.id === parseInt(botId));
     if (!bot) {
       return res.status(404).json({
         success: false,
-        error: 'Bot not found'
+        error: 'Bot not found',
+        requestId
       });
     }
 
-    // Получить сообщения
-    console.log(`📬 Loading messages for bot_id=${botId}, status=${status}, limit=${limit}, offset=${offset}`);
+    const parsedLimit = Math.max(1, Math.min(parseInt(limit, 10) || 50, 200));
+    const parsedOffset = Math.max(0, parseInt(offset, 10) || 0);
+    const cursor = before_message_id || beforeMessageId || null;
 
     const result = await BotMessage.getByBotId(botId, {
       status,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
+      limit: parsedLimit,
+      offset: parsedOffset,
+      beforeMessageId: cursor
     });
-
-    console.log(`📊 Loaded ${result.messages?.length || 0} messages, total=${result.total || 0}`);
 
     res.json({
       success: true,
-      data: result
+      data: {
+        messages: Array.isArray(result.messages) ? result.messages.map(toApiMessage) : [],
+        total: result.total,
+        hasMore: result.hasMore,
+        nextCursor: result.nextCursor
+      },
+      requestId
     });
   } catch (error) {
     console.error('Error getting messages:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      requestId: req.requestId
     });
   }
 });
@@ -106,12 +155,14 @@ router.get('/history/:botId', async (req, res) => {
   try {
     const { botId } = req.params;
     const { status = 'all' } = req.query;
+    const requestId = req.requestId;
 
     const bot = MONITORED_BOTS.find(b => b.id === parseInt(botId));
     if (!bot) {
       return res.status(404).json({
         success: false,
-        error: 'Bot not found'
+        error: 'Bot not found',
+        requestId
       });
     }
 
@@ -124,13 +175,20 @@ router.get('/history/:botId', async (req, res) => {
 
     res.json({
       success: true,
-      data: result
+      data: {
+        messages: Array.isArray(result.messages) ? result.messages.map(toApiMessage) : [],
+        total: result.total,
+        hasMore: result.hasMore,
+        nextCursor: result.nextCursor
+      },
+      requestId
     });
   } catch (error) {
     console.error('Error getting history:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      requestId: req.requestId
     });
   }
 });
@@ -257,6 +315,7 @@ async function processSingleMessage({ record, chatId, messageId, rawText }) {
 router.post('/process', async (req, res) => {
   try {
     const body = req.body || {};
+    const requestId = req.requestId;
 
     const recordId = body.record_id || body.message_uuid || body.messageId || body.recordId || null;
     const rawChatId = body.chat_id ?? body.chatId ?? body.bot_id ?? body.botId;
@@ -272,7 +331,8 @@ router.post('/process', async (req, res) => {
         success: false,
         error: 'messageId is required',
         code: 'BAD_REQUEST',
-        detail: `chat_id (${chatId}) and message_id (${messageId}) are required. Received: ${JSON.stringify(body)}`
+        detail: `chat_id (${chatId}) and message_id (${messageId}) are required. Received: ${JSON.stringify(body)}`,
+        requestId
       });
     }
 
@@ -281,11 +341,12 @@ router.post('/process', async (req, res) => {
       return res.status(404).json({
         success: false,
         code: 'NOT_FOUND',
-        detail: 'Message not found'
+        detail: 'Message not found',
+        requestId
       });
     }
 
-    await BotMessage.updateStatus(record.id, 'pending');
+    await BotMessage.updateStatus(record.id, 'processing');
 
     try {
       console.log(`📥 Processing userbot message id=${record.id}, chat=${chatId}, message=${messageId}`);
@@ -306,6 +367,7 @@ router.post('/process', async (req, res) => {
         if (uiData) {
           await BotMessage.updateData(record.id, uiData);
         }
+        await BotMessage.linkToTransaction(chatId, messageId, primaryCheck.id);
       }
 
       await BotMessage.updateStatus(record.id, 'processed', {
@@ -316,7 +378,7 @@ router.post('/process', async (req, res) => {
         success: true,
         data: result.created,
         duplicates: result.duplicates,
-        requestId: result.requestId,
+        requestId: result.requestId || requestId,
         message: 'Message processed successfully'
       });
     } catch (error) {
@@ -347,7 +409,8 @@ router.post('/process', async (req, res) => {
           status: 'duplicate',
           code,
           detail,
-          duplicates: error.meta?.duplicates || []
+          duplicates: error.meta?.duplicates || [],
+          requestId: error.meta?.requestId || requestId
         });
       }
 
@@ -355,7 +418,7 @@ router.post('/process', async (req, res) => {
         success: false,
         code,
         detail,
-        requestId: error.meta?.requestId
+        requestId: error.meta?.requestId || requestId
       });
     }
   } catch (error) {
@@ -363,7 +426,8 @@ router.post('/process', async (req, res) => {
     res.status(500).json({
       success: false,
       code: 'UNEXPECTED',
-      detail: error.message
+      detail: error.message,
+      requestId: req.requestId
     });
   }
 });
@@ -380,12 +444,14 @@ router.post('/process', async (req, res) => {
 router.post('/process-multiple', async (req, res) => {
   try {
     const { messages } = req.body;
+    const requestId = req.requestId;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({
         success: false,
         code: 'BAD_REQUEST',
-        detail: 'messages array is required'
+        detail: 'messages array is required',
+        requestId
       });
     }
 
@@ -415,16 +481,26 @@ router.post('/process-multiple', async (req, res) => {
           continue;
         }
 
-        await BotMessage.updateStatus(record.id, 'pending');
+        await BotMessage.updateStatus(record.id, 'processing');
 
         try {
-          await processSingleMessage({
+          const { primaryCheck } = await processSingleMessage({
             record,
             chatId: String(chatId ?? record.chat_id),
             messageId: String(messageId ?? record.message_id),
             rawText
           });
-
+          if (primaryCheck) {
+            const uiData = buildUiPayloadFromCheck(primaryCheck);
+            if (uiData) {
+              await BotMessage.updateData(record.id, uiData);
+            }
+            await BotMessage.linkToTransaction(
+              String(chatId ?? record.chat_id),
+              String(messageId ?? record.message_id),
+              primaryCheck.id
+            );
+          }
           await BotMessage.updateStatus(record.id, 'processed');
           summary.success += 1;
         } catch (processError) {
@@ -458,14 +534,16 @@ router.post('/process-multiple', async (req, res) => {
     res.json({
       success: true,
       data: summary,
-      message: `Processed ${summary.success}/${messages.length} messages`
+      message: `Processed ${summary.success}/${messages.length} messages`,
+      requestId
     });
   } catch (error) {
     console.error('Error processing multiple messages:', error);
     res.status(500).json({
       success: false,
       code: 'UNEXPECTED',
-      detail: error.message
+      detail: error.message,
+      requestId: req.requestId
     });
   }
 });
@@ -482,11 +560,13 @@ router.post('/process-multiple', async (req, res) => {
 router.post('/retry', async (req, res) => {
   try {
     const { messageId } = req.body;
+    const requestId = req.requestId;
 
     if (!messageId) {
       return res.status(400).json({
         success: false,
-        error: 'messageId is required'
+        error: 'messageId is required',
+        requestId
       });
     }
 
@@ -494,22 +574,25 @@ router.post('/retry', async (req, res) => {
     if (!message) {
       return res.status(404).json({
         success: false,
-        error: 'Message not found'
+        error: 'Message not found',
+        requestId
       });
     }
 
-    // Сбросить статус на unprocessed и очистить ошибку
-    await BotMessage.updateStatus(messageId, 'unprocessed', { error: null });
+    // Сбросить статус на new и очистить ошибку
+    await BotMessage.updateStatus(messageId, 'new', { error: null });
 
     res.json({
       success: true,
-      message: 'Message reset to unprocessed, ready for retry'
+      message: 'Message reset to new, ready for retry',
+      requestId
     });
   } catch (error) {
     console.error('Error retrying message:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      requestId: req.requestId
     });
   }
 });
@@ -526,6 +609,7 @@ router.post('/load-history/:botId', async (req, res) => {
   try {
     const { botId } = req.params;
     const { days } = req.body;
+    const requestId = req.requestId;
 
     // Получить информацию о боте
     const bot = MONITORED_BOTS.find(b => b.id === parseInt(botId));
@@ -533,7 +617,8 @@ router.post('/load-history/:botId', async (req, res) => {
     if (!bot) {
       return res.status(404).json({
         success: false,
-        error: 'Bot not found'
+        error: 'Bot not found',
+        requestId
       });
     }
 
@@ -557,7 +642,8 @@ router.post('/load-history/:botId', async (req, res) => {
     if (!result.success) {
       return res.status(500).json({
         success: false,
-        error: result.error || 'Failed to load history from userbot'
+        error: result.error || 'Failed to load history from userbot',
+        requestId
       });
     }
 
@@ -568,14 +654,16 @@ router.post('/load-history/:botId', async (req, res) => {
       loaded: result.loaded,
       saved: result.saved,
       skipped: result.skipped,
-      errors: result.errors
+      errors: result.errors,
+      requestId
     });
 
   } catch (error) {
     console.error('Error loading history:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      requestId: req.requestId
     });
   }
 });

@@ -9,7 +9,8 @@ const FiltersBar = ({ statusFilter, onChangeFilter, messages }) => {
 
   const filters = [
     { value: 'all', label: 'Все', count: stats.total },
-    { value: 'unprocessed', label: 'Не обработано', count: stats.unprocessed },
+    { value: 'new', label: 'Новые', count: stats.new },
+    { value: 'processing', label: 'В обработке', count: stats.processing },
     { value: 'processed', label: 'Обработано', count: stats.processed },
     { value: 'error', label: 'Ошибки', count: stats.error }
   ];

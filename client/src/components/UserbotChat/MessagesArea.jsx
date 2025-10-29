@@ -8,6 +8,9 @@ import MessageCard from './MessageCard';
 const MessagesArea = ({
   messages,
   loading,
+  loadingMore,
+  hasMore,
+  onLoadOlder,
   selectedMessages,
   onToggleSelection,
   onProcess,
@@ -40,6 +43,18 @@ const MessagesArea = ({
 
   return (
     <div className="messages-area">
+      {hasMore && (
+        <div className="messages-load-more">
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={onLoadOlder}
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Загрузка...' : 'Загрузить предыдущие сообщения'}
+          </button>
+        </div>
+      )}
+
       {messages.map(message => (
         <MessageCard
           key={message.id}
@@ -50,6 +65,13 @@ const MessagesArea = ({
           onRetry={onRetry}
         />
       ))}
+
+      {loading && messages.length > 0 && (
+        <div className="messages-inline-loading">
+          <div className="loading-spinner small"></div>
+          <span>Обновление...</span>
+        </div>
+      )}
     </div>
   );
 };

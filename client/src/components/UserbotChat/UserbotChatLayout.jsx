@@ -16,8 +16,11 @@ const UserbotChatLayout = () => {
     messages,
     loading,
     refreshing,
+    loadingMore,
+    hasMore,
     statusFilter,
     selectedMessages,
+    loadOlder,
 
     // Actions
     selectBot,
@@ -54,6 +57,9 @@ const UserbotChatLayout = () => {
       <ChatPanel
         bot={selectedBot}
         messages={messages}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadOlder={loadOlder}
         statusFilter={statusFilter}
         onChangeFilter={changeStatusFilter}
         selectedMessages={selectedMessages}

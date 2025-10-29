@@ -60,17 +60,17 @@ export const formatTimestamp = (timestamp) => {
  */
 export const getStatusBadge = (status) => {
   const badges = {
-    unprocessed: {
-      text: 'Не обработано',
-      className: 'badge-warning',
-      icon: '⏳',
-      color: 'var(--status-warning)'
+    new: {
+      text: 'Новые',
+      className: 'badge-info',
+      icon: '🆕',
+      color: 'var(--status-info)'
     },
-    pending: {
+    processing: {
       text: 'В обработке',
       className: 'badge-info',
-      icon: '⏱',
-      color: 'var(--status-info)'
+      icon: '🔄',
+      color: 'var(--status-warning)'
     },
     processed: {
       text: 'Обработано',
@@ -86,7 +86,7 @@ export const getStatusBadge = (status) => {
     }
   };
 
-  return badges[status] || badges.unprocessed;
+  return badges[status] || badges.new;
 };
 
 /**
@@ -194,18 +194,18 @@ export const calculateStats = (messages) => {
   if (!messages || messages.length === 0) {
     return {
       total: 0,
-      unprocessed: 0,
+      new: 0,
       processed: 0,
-      pending: 0,
+      processing: 0,
       error: 0
     };
   }
 
   return {
     total: messages.length,
-    unprocessed: messages.filter(m => m.status === 'unprocessed').length,
+    new: messages.filter(m => m.status === 'new').length,
     processed: messages.filter(m => m.status === 'processed').length,
-    pending: messages.filter(m => m.status === 'pending').length,
+    processing: messages.filter(m => m.status === 'processing').length,
     error: messages.filter(m => m.status === 'error').length
   };
 };

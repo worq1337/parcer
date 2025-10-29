@@ -1,8 +1,11 @@
 require('dotenv').config();
+const { randomUUID } = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const pool = require('./config/database');
 const telegramBot = require('./services/telegramBot');
+const pkg = require('../package.json');
+const userbotService = require('./services/userbotService');
 
 const checkRoutes = require('./routes/checkRoutes');
 const operatorRoutes = require('./routes/operatorRoutes');
@@ -23,9 +26,25 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Логирование запросов
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  const requestId = randomUUID();
+  req.requestId = requestId;
+  res.locals.requestId = requestId;
+
+  const startedAt = Date.now();
+  const originalJson = res.json.bind(res);
+  res.json = (payload) => {
+    if (payload && typeof payload === 'object' && payload.requestId === undefined) {
+      payload.requestId = requestId;
+    }
+    return originalJson(payload);
+  };
+
+  res.on('finish', () => {
+    const duration = Date.now() - startedAt;
+    console.log(`[${requestId}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
+  });
+
   next();
 });
 
@@ -38,11 +57,58 @@ app.use('/api/notifications', notificationRoutes); // patch-017 §5
 app.use('/api/license', licenseRoutes); // patch-022: license key validation
 app.use('/api/userbot-chat', userbotChatRoutes); // Userbot chat with bots
 
+async function getHealthSnapshot() {
+  const snapshot = {
+    success: true,
+    status: 'ok',
+    version: pkg.version,
+    build: process.env.BUILD_SHA || 'dev',
+    timestamp: new Date().toISOString(),
+    services: {}
+  };
+
+  try {
+    await pool.query('SELECT 1');
+    snapshot.services.database = 'connected';
+  } catch (error) {
+    snapshot.services.database = 'error';
+    snapshot.services.databaseError = error.message;
+    snapshot.success = false;
+    snapshot.status = 'error';
+  }
+
+  const queueConnections = typeof notificationRoutes.getActiveConnections === 'function'
+    ? notificationRoutes.getActiveConnections()
+    : null;
+  snapshot.services.queue = {
+    activeConnections: queueConnections
+  };
+
+  try {
+    const userbotStatus = await userbotService.getStatus();
+    snapshot.services.userbot = userbotStatus;
+    if (userbotStatus && userbotStatus.success === false) {
+      snapshot.success = false;
+      snapshot.status = 'error';
+    }
+  } catch (error) {
+    snapshot.services.userbot = {
+      success: false,
+      error: error.message
+    };
+    snapshot.success = false;
+    snapshot.status = 'error';
+  }
+
+  return snapshot;
+}
+
 // Корневой маршрут
 app.get('/', (req, res) => {
   res.json({
     message: 'Receipt Parser API',
-    version: '1.0.0',
+    version: pkg.version,
+    build: process.env.BUILD_SHA || 'dev',
     endpoints: {
       checks: '/api/checks',
       operators: '/api/operators',
@@ -55,17 +121,28 @@ app.get('/', (req, res) => {
 // Проверка здоровья API
 app.get('/health', async (req, res) => {
   try {
-    await pool.query('SELECT 1');
-    res.json({
-      status: 'ok',
-      database: 'connected',
-      timestamp: new Date().toISOString()
-    });
+    const snapshot = await getHealthSnapshot();
+    res.status(snapshot.success ? 200 : 503).json(snapshot);
   } catch (error) {
     res.status(500).json({
+      success: false,
       status: 'error',
-      database: 'disconnected',
-      error: error.message
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+app.get('/api/health', async (req, res) => {
+  try {
+    const snapshot = await getHealthSnapshot();
+    res.status(snapshot.success ? 200 : 503).json(snapshot);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });

@@ -49,3 +49,8 @@ code {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
+
+.app-version-badge {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}

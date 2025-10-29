@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import Icon from './icons/Icon';
+import AppVersionBadge from './AppVersionBadge';
 import QueueRow from './QueueRow';
 import '../styles/Admin.css';
 import { adminAPI } from '../services/api';
@@ -547,7 +548,7 @@ const Admin = ({ onClose }) => {
                 <div className="system-card-body">
                   <div className="system-stat">
                     <span className="stat-label">Версия:</span>
-                    <span>{window.electron?.appVersion || '1.0.2'}</span>
+                    <AppVersionBadge />
                   </div>
                   <div className="system-stat">
                     <span className="stat-label">Статус:</span>

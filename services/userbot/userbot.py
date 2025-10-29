@@ -14,6 +14,8 @@ from telethon.tl.types import User, PeerChannel, PeerChat, PeerUser, Channel, Ch
 from telethon.tl.types import InputPeerUser, InputPeerChannel, InputPeerChat
 import config
 
+BACKEND_BASE = os.getenv('BACKEND_BASE', 'http://backend:3001')
+
 
 class UserbotManager:
     """
@@ -276,7 +278,7 @@ class UserbotManager:
             cursor.execute(
                 """INSERT INTO bot_messages
                    (bot_id, telegram_message_id, chat_id, message_id, timestamp, text, status, process_attempts)
-                   VALUES (%s, %s, %s, %s, %s, %s, 'unprocessed', 0)
+                   VALUES (%s, %s, %s, %s, %s, %s, 'new', 0)
                    ON CONFLICT (chat_id, message_id) DO NOTHING""",
                 (
                     str(bot_id),
@@ -329,6 +331,25 @@ class UserbotManager:
 
                 # Сохраняем сообщение в БД для чата
                 self.save_message_to_db(sender.id, event.message.id, message_text)
+
+                payload = {
+                    'chat_id': str(sender.id),
+                    'message_id': str(event.message.id),
+                    'raw_text': message_text
+                }
+
+                async def _auto_process():
+                    try:
+                        await asyncio.to_thread(
+                            requests.post,
+                            f"{BACKEND_BASE}/api/userbot-chat/process",
+                            json=payload,
+                            timeout=5
+                        )
+                    except Exception as push_error:
+                        print(f"[userbot] auto process failed: {push_error}")
+
+                asyncio.create_task(_auto_process())
 
                 # Пересылаем сообщение в наш бот
                 try:
@@ -485,6 +506,48 @@ class UserbotManager:
             raise ValueError('Message has no text content')
 
         return text
+
+    async def get_messages(self, chat_id, limit=50, before_message_id=None):
+        if not self.client:
+            await self.initialize()
+
+        if not self.client.is_connected():
+            await self.client.connect()
+
+        peer = await self.resolve_entity(chat_id)
+        kwargs = {
+            'limit': max(1, min(int(limit or 50), 200))
+        }
+
+        if before_message_id:
+            try:
+                kwargs['offset_id'] = int(str(before_message_id))
+            except (TypeError, ValueError):
+                kwargs['offset_id'] = int(before_message_id)
+
+        messages = await self.client.get_messages(peer, **kwargs)
+
+        dedup = set()
+        out = []
+        for message in messages:
+            message_id = getattr(message, 'id', None)
+            if message_id is None:
+                continue
+            message_id = str(message_id)
+            if message_id in dedup:
+                continue
+            dedup.add(message_id)
+
+            text = getattr(message, 'message', None) or getattr(message, 'raw_text', None) or ''
+            out.append({
+                'message_id': message_id,
+                'chat_id': str(chat_id),
+                'sender_id': str(getattr(message, 'sender_id', '') or ''),
+                'date': message.date.isoformat() if getattr(message, 'date', None) else None,
+                'text': text
+            })
+
+        return out
 
     async def get_chat_meta(self, chat_id):
         if not self.client:

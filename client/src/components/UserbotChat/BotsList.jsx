@@ -34,7 +34,8 @@ const BotsList = ({ bots, selectedBotId, onSelectBot, loading }) => {
       </div>
       <div className="bots-list-content">
         {bots.map(bot => {
-          const totalUnprocessed = bot.stats?.unprocessed || 0;
+          const totalNew = bot.stats?.new || 0;
+          const totalProcessing = bot.stats?.processing || 0;
           const totalProcessed = bot.stats?.processed || 0;
           const totalError = bot.stats?.error || 0;
 
@@ -52,11 +53,16 @@ const BotsList = ({ bots, selectedBotId, onSelectBot, loading }) => {
                 </div>
               </div>
 
-              {(totalUnprocessed > 0 || totalProcessed > 0 || totalError > 0) && (
+              {(totalNew > 0 || totalProcessing > 0 || totalProcessed > 0 || totalError > 0) && (
                 <div className="bot-list-item-stats">
-                  {totalUnprocessed > 0 && (
-                    <div className="bot-stat unprocessed">
-                      ⏳ {totalUnprocessed}
+                  {totalNew > 0 && (
+                    <div className="bot-stat new">
+                      ⏳ {totalNew}
+                    </div>
+                  )}
+                  {totalProcessing > 0 && (
+                    <div className="bot-stat processing">
+                      🔄 {totalProcessing}
                     </div>
                   )}
                   {totalProcessed > 0 && (

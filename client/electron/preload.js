@@ -5,12 +5,41 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+let appMetaCache = null;
+const fetchAppMeta = async () => {
+  if (appMetaCache) {
+    return appMetaCache;
+  }
+  try {
+    appMetaCache = await ipcRenderer.invoke('app:getMeta');
+    return appMetaCache;
+  } catch (error) {
+    console.error('[preload] failed to fetch app meta', error);
+    const fallback = {
+      name: 'Receipt Parser',
+      version: '—',
+      build: 'dev',
+      builtAt: new Date().toISOString()
+    };
+    appMetaCache = fallback;
+    return fallback;
+  }
+};
+
+contextBridge.exposeInMainWorld('appInfo', {
+  getMeta: () => fetchAppMeta()
+});
+
 contextBridge.exposeInMainWorld('electron', {
   // Platform info
   platform: process.platform,
 
-  // patch-021: App version (hardcoded to avoid asar issues)
-  appVersion: '1.0.5',
+  getAppVersion: async () => {
+    const meta = await fetchAppMeta();
+    return meta.version;
+  },
+
+  getAppMeta: () => fetchAppMeta(),
 
   // patch-017 §5: Notifications API
   notifications: {

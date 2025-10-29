@@ -10,6 +10,9 @@ import BulkActionsBar from './BulkActionsBar';
 const ChatPanel = ({
   bot,
   messages,
+  hasMore,
+  loadingMore,
+  onLoadOlder,
   statusFilter,
   onChangeFilter,
   selectedMessages,
@@ -40,6 +43,9 @@ const ChatPanel = ({
       <MessagesArea
         messages={messages}
         loading={loading}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        onLoadOlder={onLoadOlder}
         selectedMessages={selectedMessages}
         onToggleSelection={onToggleSelection}
         onProcess={onProcessMessage}

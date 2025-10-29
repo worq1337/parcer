@@ -1,0 +1,29 @@
+appId: com.parcer.app
+productName: Receipt Parser
+directories:
+  buildResources: build
+  output: dist
+files:
+  - build/**/*
+  - electron/**/*
+  - package.json
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "Receipt Parser"
+  uninstallDisplayName: "Receipt Parser"
+  license: null
+artifactName: "${productName}-Setup-${version}.exe"
+publish:
+  provider: github
+  owner: worq1337
+  repo: parcer

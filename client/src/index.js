@@ -6,11 +6,19 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
+// StrictMode only in development to avoid production issues
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 root.render(
   <ErrorBoundary>
-    <React.StrictMode>
+    {isDevelopment ? (
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    ) : (
       <App />
-    </React.StrictMode>
+    )}
   </ErrorBoundary>
 );
 

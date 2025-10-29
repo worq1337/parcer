@@ -1,6 +1,6 @@
 {
   "name": "receipt-parser-client",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Desktop приложение для парсера банковских чеков",
   "homepage": ".",
   "author": "",
@@ -140,10 +140,15 @@
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "Receipt Parser"
+      "shortcutName": "Receipt Parser",
+      "uninstallDisplayName": "Receipt Parser",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     },
     "linux": {
       "target": [

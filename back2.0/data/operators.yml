@@ -1,0 +1,103 @@
+# Словарь операторов для нормализации
+# Формат: pattern (регэксп) -> canonical и app
+
+- pattern: "OQ P2P(>.*)?|\\bOQ\\b"
+  canonical: "OQ"
+  app: "OQ"
+  weight: 10
+
+- pattern: "NBU P2P HUMO UZCARD>|NBU ONLINE KONVERSIY|NBU 2P2 U PLAT UZCARD"
+  canonical: "NBU"
+  app: "Milliy 2.0"
+  weight: 10
+
+- pattern: "SQB MOBILE HUMO P2P|SQB MOBILE UZCARD P2P UZCARD"
+  canonical: "SQB MOBILE P2P"
+  app: "SQB"
+  weight: 10
+
+- pattern: "XAZNA.*|XAZNA PAYNET TOLOV"
+  canonical: "XAZNA"
+  app: "Xazna"
+  weight: 10
+
+- pattern: "PSP P2P.*|MyUztelecom"
+  canonical: "PSP P2P"
+  app: "MyUztelecom"
+  weight: 10
+
+- pattern: "UPAY.*|DAVR UPAY.*"
+  canonical: "UPAY"
+  app: "Humans"
+  weight: 10
+
+- pattern: "TENGE.*|T24.*|Tenge24"
+  canonical: "TENGE24"
+  app: "Tenge24"
+  weight: 9
+
+- pattern: "PAYNET.*|UZPAYNET.*|UZCARD OTHERS 2 ANY PAYNET"
+  canonical: "PAYNET"
+  app: "Paynet"
+  weight: 10
+
+- pattern: "DAVR MOBILE.*"
+  canonical: "DAVR MOBILE"
+  app: "Davr Mobile"
+  weight: 9
+
+- pattern: "HAMKOR.*"
+  canonical: "HAMKOR"
+  app: "Hamkor"
+  weight: 9
+
+- pattern: "MKBANK.*|MAVRID.*"
+  canonical: "MAVRID"
+  app: "Mavrid"
+  weight: 8
+
+- pattern: "UZCARD PLYUS.*"
+  canonical: "UZCARD PLYUS"
+  app: "Joyda"
+  weight: 8
+
+- pattern: "ASAKA.*"
+  canonical: "ASAKA"
+  app: "Asakabank"
+  weight: 8
+
+- pattern: "SMARTBANK.*"
+  canonical: "SMARTBANK"
+  app: "SmartBank"
+  weight: 8
+
+- pattern: "BEEPUL.*"
+  canonical: "BEEPUL"
+  app: "Beepul"
+  weight: 7
+
+- pattern: "PAYWAY.*"
+  canonical: "PAYWAY"
+  app: "PayWay"
+  weight: 7
+
+- pattern: "PAYME.*"
+  canonical: "PAYME"
+  app: "Payme"
+  weight: 9
+
+- pattern: "UB PEREVOD.*|UzumBank"
+  canonical: "UZUMBANK"
+  app: "UzumBank"
+  weight: 9
+
+- pattern: "CHAKANA.*"
+  canonical: "CHAKANAPAY"
+  app: "Chakanapay"
+  weight: 7
+
+- pattern: "TBC.*"
+  canonical: "TBC"
+  app: "TBC"
+  weight: 8
+

@@ -7,18 +7,13 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
-// StrictMode only in development to avoid production issues
-const isDevelopment = process.env.NODE_ENV === 'development';
-
+// FIXED: StrictMode включен обратно после исправления всех проблем с useEffect
+// Теперь безопасно использовать во всех окружениях
 root.render(
   <ErrorBoundary>
-    {isDevelopment ? (
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    ) : (
+    <React.StrictMode>
       <App />
-    )}
+    </React.StrictMode>
   </ErrorBoundary>
 );
 

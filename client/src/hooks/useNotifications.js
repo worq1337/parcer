@@ -13,6 +13,10 @@ export function useNotifications(enabled = true) {
   const eventSourceRef = useRef(null);
   const checksCountRef = useRef(0);
 
+  // Стабильные refs для обработчиков событий
+  const handleTxRef = useRef(null);
+  const handleLegacyRef = useRef(null);
+
   useEffect(() => {
     if (!enabled || !window.electron) {
       console.log('Notifications disabled or not in Electron');
@@ -30,6 +34,7 @@ export function useNotifications(enabled = true) {
       console.log('✅ SSE connection established');
     });
 
+    // Создаем обработчики и сохраняем в refs для правильной очистки
     const handleTx = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -52,6 +57,11 @@ export function useNotifications(enabled = true) {
       }
     };
 
+    // Сохраняем ссылки на обработчики
+    handleTxRef.current = handleTx;
+    handleLegacyRef.current = handleLegacy;
+
+    // Регистрируем обработчики
     eventSource.addEventListener('tx', handleTx);
     eventSource.addEventListener('legacy', handleLegacy);
 
@@ -65,9 +75,15 @@ export function useNotifications(enabled = true) {
     return () => {
       console.log('🔌 Closing SSE connection');
       if (eventSourceRef.current) {
-        eventSourceRef.current.removeEventListener('tx', handleTx);
-        eventSourceRef.current.removeEventListener('legacy', handleLegacy);
+        // Используем сохраненные ссылки для корректного удаления
+        if (handleTxRef.current) {
+          eventSourceRef.current.removeEventListener('tx', handleTxRef.current);
+        }
+        if (handleLegacyRef.current) {
+          eventSourceRef.current.removeEventListener('legacy', handleLegacyRef.current);
+        }
         eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
     };
   }, [enabled]);

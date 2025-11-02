@@ -204,7 +204,7 @@ const JSON_SCHEMA = {
         }
       }
     },
-    required: ['amount', 'currency', 'datetime_iso', 'transaction_type', 'operator', 'card_last4']
+    required: ['amount', 'currency', 'datetime_iso', 'transaction_type', 'operator', 'card_last4', 'balance', 'meta']
   },
   strict: true
 };

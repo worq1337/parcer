@@ -276,14 +276,16 @@ export const useUserbotChat = () => {
   }, []); // FIXED: Пустой массив - loadBots стабильна!
 
   // Загрузка сообщений при смене бота или фильтра
+  // loadMessages стабильна благодаря useCallback с фиксированными зависимостями
   useEffect(() => {
     if (!selectedBotId) {
       return;
     }
     loadMessages();
-  }, [selectedBotId, statusFilter, loadMessages]);
+  }, [selectedBotId, statusFilter]); // loadMessages не в deps - стабильна
 
   // Авто-обновление каждые 30 секунд
+  // loadMessages и loadBots стабильны благодаря useCallback с пустыми/фиксированными deps
   useEffect(() => {
     if (!selectedBotId) {
       return undefined;
@@ -291,14 +293,13 @@ export const useUserbotChat = () => {
 
     const interval = setInterval(() => {
       // Проверяем состояние внутри интервала, а не в зависимостях
-      if (!loading && !refreshing) {
-        loadMessages({ silent: true });
-        loadBots();
-      }
+      // loadMessages и loadBots стабильны, вызываем напрямую
+      loadMessages({ silent: true });
+      loadBots();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [selectedBotId, loadMessages, loadBots]); // FIXED: loading/refreshing убраны!
+  }, [selectedBotId]); // Только selectedBotId - loadMessages и loadBots стабильны!
 
   // Cleanup при размонтировании
   useEffect(() => {

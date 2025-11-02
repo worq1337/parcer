@@ -1,86 +1,115 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-toastify';
 import userbotChatService from '../services/userbotChatService';
-import { useUserbotStore } from '../state/userbotStore';
 
 const DEFAULT_LIMIT = 50;
+const EMPTY_MESSAGES = Object.freeze([]);
 
-// Стабильные селекторы вне компонента
-const selectMessages = (state, botId) => {
-  if (!botId) return [];
-  return state.items[botId] || [];
-};
-
-const selectNextCursor = (state, botId) => {
-  if (!botId) return null;
-  return state.oldestId[botId] || null;
-};
-
-const selectHasMore = (state, botId) => {
-  if (!botId) return false;
-  return Boolean(state.hasMore[botId]);
+const getMessageKey = (message) => {
+  if (!message) {
+    return null;
+  }
+  return message.message_id || message.id || null;
 };
 
 export const useUserbotChat = () => {
   const [bots, setBots] = useState([]);
   const [selectedBotId, setSelectedBotId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [botsLoading, setBotsLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedMessages, setSelectedMessages] = useState(new Set());
+  const [chatState, setChatState] = useState({
+    items: {},
+    nextCursor: {},
+    hasMore: {}
+  });
 
-  // Используем стабильные селекторы
-  const messages = useUserbotStore((state) => selectMessages(state, selectedBotId));
-  const nextCursor = useUserbotStore((state) => selectNextCursor(state, selectedBotId));
-  const chatHasMore = useUserbotStore((state) => selectHasMore(state, selectedBotId));
-
-  const setMessagesForChat = useUserbotStore((state) => state.setMessagesForChat);
-  const appendOlderForChat = useUserbotStore((state) => state.appendOlderForChat);
-  const clearChat = useUserbotStore((state) => state.clearChat);
+  const messages = selectedBotId ? chatState.items[selectedBotId] || EMPTY_MESSAGES : EMPTY_MESSAGES;
+  const nextCursor = selectedBotId ? chatState.nextCursor[selectedBotId] || null : null;
+  const chatHasMore = selectedBotId ? Boolean(chatState.hasMore[selectedBotId]) : false;
 
   // Refs для отслеживания монтирования компонента
   const isMounted = useRef(true);
-  const abortControllerRef = useRef(null);
+  const botsRequestTokenRef = useRef(null);
+
+  const clearChat = useCallback((chatId) => {
+    if (chatId == null) {
+      return;
+    }
+
+    const safeChatId = String(chatId);
+
+    setChatState((prev) => {
+      if (!prev.items[safeChatId] && !prev.nextCursor[safeChatId] && !prev.hasMore[safeChatId]) {
+        return prev;
+      }
+
+      const nextItems = { ...prev.items };
+      const nextCursorMap = { ...prev.nextCursor };
+      const nextHasMoreMap = { ...prev.hasMore };
+      delete nextItems[safeChatId];
+      delete nextCursorMap[safeChatId];
+      delete nextHasMoreMap[safeChatId];
+
+      return {
+        items: nextItems,
+        nextCursor: nextCursorMap,
+        hasMore: nextHasMoreMap
+      };
+    });
+  }, []);
 
   // loadBots без зависимостей - использует refs для проверки состояния
   const loadBots = useCallback(async () => {
-    // Создаем новый AbortController для этого запроса
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
+    const requestToken = Symbol('botsRequest');
+    botsRequestTokenRef.current = requestToken;
 
     try {
-      setLoading(true);
+      setBotsLoading(true);
       const botsData = await userbotChatService.getBots();
 
-      // Проверяем, что компонент еще смонтирован
-      if (!isMounted.current || abortControllerRef.current?.signal.aborted) {
+      if (!isMounted.current || botsRequestTokenRef.current !== requestToken) {
         return;
       }
 
-      setBots(botsData || []);
+      const normalizedBots = Array.isArray(botsData)
+        ? botsData
+            .map((bot) => {
+              const primaryId = bot?.id ?? bot?.bot_id ?? bot?.chat_id ?? bot?.telegram_id ?? bot?.uuid;
+              if (primaryId == null) {
+                return null;
+              }
+              return {
+                ...bot,
+                id: String(primaryId)
+              };
+            })
+            .filter(Boolean)
+        : [];
 
-      // Автовыбор первого бота только если ничего не выбрано
-      setSelectedBotId((currentId) => {
-        if (!currentId && botsData && botsData.length > 0) {
-          return botsData[0].id;
-        }
-        return currentId;
-      });
+      setBots(normalizedBots);
+
+    setSelectedBotId((currentId) => {
+      if (!currentId && normalizedBots.length > 0) {
+        return normalizedBots[0].id;
+      }
+      return currentId;
+    });
     } catch (error) {
-      if (error.name === 'AbortError' || !isMounted.current) {
+      if (!isMounted.current || botsRequestTokenRef.current !== requestToken) {
         return;
       }
-      console.error('Error loading bots:', error);
+      console.error('Ошибка загрузки списка ботов:', error);
       toast.error('Ошибка загрузки списка ботов');
     } finally {
-      if (isMounted.current && !abortControllerRef.current?.signal.aborted) {
-        setLoading(false);
+      if (isMounted.current && botsRequestTokenRef.current === requestToken) {
+        setBotsLoading(false);
       }
     }
-  }, []); // Пустой массив - loadBots стабильна!
+  }, []);
 
   const loadMessages = useCallback(
     async ({ cursor, silent } = {}) => {
@@ -95,7 +124,7 @@ export const useUserbotChat = () => {
       } else if (silent) {
         setRefreshing(true);
       } else {
-        setLoading(true);
+        setMessagesLoading(true);
       }
 
       try {
@@ -105,28 +134,95 @@ export const useUserbotChat = () => {
           before: cursor
         });
 
-        // Проверяем, что компонент еще смонтирован
         if (!isMounted.current) {
           return;
         }
 
-        const fetchedMessages = Array.isArray(result.messages) ? result.messages : [];
+        const fetchedMessagesRaw = Array.isArray(result.messages) ? result.messages : [];
+        const fetchedMessages = fetchedMessagesRaw.map((message) => {
+          const primaryId = message?.id ?? message?.message_id ?? message?.telegram_message_id ?? message?.uuid;
+          return primaryId == null
+            ? message
+            : {
+                ...message,
+                id: String(primaryId)
+              };
+        });
         const options = {
           nextCursor: result.nextCursor || null,
           hasMore: Boolean(result.hasMore)
         };
 
         if (append) {
-          appendOlderForChat(selectedBotId, fetchedMessages, options);
+          setChatState((prev) => {
+            const safeChatId = String(selectedBotId);
+            const existing = prev.items[safeChatId] || EMPTY_MESSAGES;
+            const seen = new Set();
+            const merged = [];
+
+            for (const message of existing) {
+              const key = getMessageKey(message);
+              if (key) {
+                seen.add(key);
+              }
+              merged.push(message);
+            }
+
+            for (const message of fetchedMessages) {
+              const key = getMessageKey(message);
+              if (key && seen.has(key)) {
+                continue;
+              }
+              if (key) {
+                seen.add(key);
+              }
+              merged.push(message);
+            }
+
+            const hasMoreValue = options.hasMore !== undefined
+              ? Boolean(options.hasMore)
+              : Boolean(prev.hasMore[safeChatId]);
+
+            return {
+              items: { ...prev.items, [safeChatId]: merged },
+              nextCursor: { ...prev.nextCursor, [safeChatId]: options.nextCursor },
+              hasMore: { ...prev.hasMore, [safeChatId]: hasMoreValue }
+            };
+          });
         } else {
-          setMessagesForChat(selectedBotId, fetchedMessages, options);
-          setSelectedMessages(new Set());
+          setChatState((prev) => {
+            const safeChatId = String(selectedBotId);
+            const unique = [];
+            const seen = new Set();
+
+            for (const message of fetchedMessages) {
+              const key = getMessageKey(message);
+              if (key && seen.has(key)) {
+                continue;
+              }
+              if (key) {
+                seen.add(key);
+              }
+              unique.push(message);
+            }
+
+            const hasMoreValue = options.hasMore !== undefined
+              ? Boolean(options.hasMore)
+              : Boolean(prev.hasMore[safeChatId]);
+
+            return {
+              items: { ...prev.items, [safeChatId]: unique },
+              nextCursor: { ...prev.nextCursor, [safeChatId]: options.nextCursor },
+              hasMore: { ...prev.hasMore, [safeChatId]: hasMoreValue }
+            };
+          });
+          setSelectedMessages((prev) => (prev.size === 0 ? prev : new Set()));
         }
       } catch (error) {
         if (!isMounted.current) {
           return;
         }
-        console.error('Error loading messages:', error);
+        console.error('Ошибка загрузки сообщений:', error);
         toast.error('Ошибка загрузки сообщений');
       } finally {
         if (!isMounted.current) {
@@ -137,11 +233,11 @@ export const useUserbotChat = () => {
         } else if (silent) {
           setRefreshing(false);
         } else {
-          setLoading(false);
+          setMessagesLoading(false);
         }
       }
     },
-    [selectedBotId, statusFilter, appendOlderForChat, setMessagesForChat]
+    [selectedBotId, statusFilter]
   );
 
   const refresh = useCallback(() => {
@@ -167,7 +263,7 @@ export const useUserbotChat = () => {
 
       const payload = {
         recordId: message.id,
-        chatId: message.bot_id || selectedBotId,
+        chatId: message.bot_id != null ? String(message.bot_id) : selectedBotId,
         messageId: message.telegram_message_id,
         rawText: message.text
       };
@@ -177,7 +273,7 @@ export const useUserbotChat = () => {
       await refresh();
       await loadBots();
     } catch (error) {
-      console.error('Error processing message:', error);
+      console.error('Ошибка обработки сообщения:', error);
       const detail = error.response?.data?.detail || error.response?.data?.error || error.message;
       const requestId = error.response?.data?.requestId;
       const composed = requestId ? `${detail} (requestId: ${requestId})` : detail;
@@ -197,7 +293,7 @@ export const useUserbotChat = () => {
         .map((msg) => ({
           id: msg.id,
           recordId: msg.id,
-          chatId: msg.bot_id || selectedBotId,
+          chatId: msg.bot_id != null ? String(msg.bot_id) : selectedBotId,
           messageId: msg.telegram_message_id,
           rawText: msg.text
         }));
@@ -212,11 +308,11 @@ export const useUserbotChat = () => {
         toast.warning(`Не удалось обработать ${result.data.failed} сообщений`);
       }
 
-      setSelectedMessages(new Set());
+      setSelectedMessages((prev) => (prev.size === 0 ? prev : new Set()));
       await refresh();
       await loadBots();
     } catch (error) {
-      console.error('Error bulk processing:', error);
+      console.error('Ошибка массовой обработки:', error);
       toast.error('Ошибка массовой обработки');
     }
   }, [messages, refresh, loadBots, selectedBotId]);
@@ -228,7 +324,7 @@ export const useUserbotChat = () => {
       await refresh();
       await loadBots();
     } catch (error) {
-      console.error('Error retrying message:', error);
+      console.error('Ошибка повтора обработки:', error);
       toast.error('Ошибка повтора обработки');
     }
   }, [refresh, loadBots]);
@@ -251,12 +347,16 @@ export const useUserbotChat = () => {
   }, [messages]);
 
   const clearSelection = useCallback(() => {
-    setSelectedMessages(new Set());
+    setSelectedMessages((prev) => (prev.size === 0 ? prev : new Set()));
   }, []);
 
   const selectBot = useCallback((botId) => {
-    setSelectedBotId(botId);
-    setSelectedMessages(new Set());
+    if (botId == null) {
+      setSelectedBotId(null);
+    } else {
+      setSelectedBotId(String(botId));
+    }
+    setSelectedMessages((prev) => (prev.size === 0 ? prev : new Set()));
     if (botId != null) {
       clearChat(botId);
     }
@@ -264,7 +364,7 @@ export const useUserbotChat = () => {
 
   const changeStatusFilter = useCallback((status) => {
     setStatusFilter(status);
-    setSelectedMessages(new Set());
+    setSelectedMessages((prev) => (prev.size === 0 ? prev : new Set()));
     if (selectedBotId != null) {
       clearChat(selectedBotId);
     }
@@ -273,7 +373,7 @@ export const useUserbotChat = () => {
   // Загрузка ботов один раз при монтировании
   useEffect(() => {
     loadBots();
-  }, []); // FIXED: Пустой массив - loadBots стабильна!
+  }, []); // CRITICAL: loadBots НЕ в deps - иначе бесконечный цикл!
 
   // Загрузка сообщений при смене бота или фильтра
   // loadMessages стабильна благодаря useCallback с фиксированными зависимостями
@@ -282,7 +382,7 @@ export const useUserbotChat = () => {
       return;
     }
     loadMessages();
-  }, [selectedBotId, statusFilter]); // loadMessages не в deps - стабильна
+  }, [selectedBotId, statusFilter]); // CRITICAL: loadMessages НЕ в deps!
 
   // Авто-обновление каждые 30 секунд
   // loadMessages и loadBots стабильны благодаря useCallback с пустыми/фиксированными deps
@@ -292,22 +392,18 @@ export const useUserbotChat = () => {
     }
 
     const interval = setInterval(() => {
-      // Проверяем состояние внутри интервала, а не в зависимостях
-      // loadMessages и loadBots стабильны, вызываем напрямую
       loadMessages({ silent: true });
       loadBots();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [selectedBotId]); // Только selectedBotId - loadMessages и loadBots стабильны!
+  }, [selectedBotId]); // CRITICAL: loadMessages/loadBots НЕ в deps!
 
   // Cleanup при размонтировании
   useEffect(() => {
     return () => {
       isMounted.current = false;
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      botsRequestTokenRef.current = null;
     };
   }, []);
 
@@ -315,7 +411,8 @@ export const useUserbotChat = () => {
     bots,
     selectedBotId,
     messages,
-    loading,
+    botsLoading,
+    messagesLoading,
     refreshing,
     loadingMore,
     statusFilter,

@@ -25,8 +25,33 @@ function repairJsonString(raw) {
   return stripCodeFences(raw)
     .replace(/\r?\n/g, ' ')
     .replace(/,\s*([}\]])/g, '$1')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'");
+    .replace(/[""]/g, '"')
+    .replace(/['']/g, "'");
+}
+
+/**
+ * Парсит сумму из различных форматов (строка или число)
+ * Обрабатывает: "50,000.00", "50 000", "50.000,00", 50000
+ * @param {string|number} raw - Исходное значение
+ * @returns {number|null} - Распарсенное число или null
+ */
+function parseAmount(raw) {
+  if (raw === null || raw === undefined || raw === '') {
+    return null;
+  }
+
+  // Если уже число и корректное
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : null;
+  }
+
+  // Преобразуем в строку и удаляем пробелы
+  const normalized = String(raw)
+    .replace(/\s/g, '') // Убираем пробелы
+    .replace(/,/g, '.'); // Заменяем запятые на точки
+
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
 }
 
 function safeParseJson(raw) {
@@ -53,9 +78,12 @@ function validateTransactionPayload(input) {
     throw new ParserError('LLM_JSON_INVALID', 'JSON не является объектом');
   }
 
-  const amount = Number(input.amount);
-  if (!Number.isFinite(amount)) {
-    throw new ParserError('AMOUNT_INVALID', 'Поле amount отсутствует или некорректно');
+  const amount = parseAmount(input.amount);
+  if (amount === null) {
+    throw new ParserError('AMOUNT_INVALID', 'Поле amount отсутствует или некорректно', {
+      raw: input.amount,
+      hint: 'Ожидается число или строка с числом (например: 50000, "50,000.00", "50 000")'
+    });
   }
 
   const currency = String(input.currency || '').trim().toUpperCase();
@@ -72,9 +100,19 @@ function validateTransactionPayload(input) {
   }
 
   const rawTransactionType = input.transaction_type || input.transactionType;
-  const transactionType = rawTransactionType ? String(rawTransactionType).trim().toLowerCase() : '';
+  let transactionType = rawTransactionType ? String(rawTransactionType).trim().toLowerCase() : '';
+
+  // Fallback: если тип не указан, определяем по сумме
   if (!transactionType) {
-    throw new ParserError('TRANSACTION_TYPE_INVALID', 'Поле transaction_type отсутствует');
+    transactionType = amount >= 0 ? 'credit' : 'debit';
+    console.warn(`[validateTransactionPayload] transaction_type не указан, применен fallback: ${transactionType} (amount: ${amount})`);
+  }
+
+  // Проверяем, что тип входит в допустимые значения
+  const validTypes = ['debit', 'credit', 'p2p', 'fee', 'refund', 'payment', 'withdrawal', 'deposit', 'transfer', 'charge'];
+  if (!validTypes.includes(transactionType)) {
+    console.warn(`[validateTransactionPayload] Неизвестный тип транзакции: ${transactionType}, применен fallback`);
+    transactionType = amount >= 0 ? 'credit' : 'debit';
   }
 
   const operator = String(input.operator || '').trim();
@@ -137,7 +175,21 @@ const JSON_SCHEMA = {
       datetime_iso: { type: 'string' },
       operator: { type: 'string' },
       card_last4: { type: 'string' },
-      transaction_type: { type: 'string', enum: ['debit', 'credit', 'p2p', 'fee', 'refund'] },
+      transaction_type: {
+        type: 'string',
+        enum: [
+          'debit',      // Списание
+          'credit',     // Пополнение
+          'p2p',        // Перевод P2P
+          'fee',        // Комиссия
+          'refund',     // Возврат
+          'payment',    // Оплата/платеж
+          'withdrawal', // Снятие
+          'deposit',    // Депозит/вклад
+          'transfer',   // Перевод
+          'charge'      // Платеж/списание
+        ]
+      },
       balance: { type: ['number', 'null'] },
       meta: {
         type: 'array',
@@ -146,21 +198,13 @@ const JSON_SCHEMA = {
           additionalProperties: false,
           properties: {
             key: { type: 'string' },
-            value: {
-              oneOf: [
-                { type: 'string' },
-                { type: 'number' },
-                { type: 'integer' },
-                { type: 'boolean' },
-                { type: 'null' }
-              ]
-            }
+            value: { type: 'string' }
           },
           required: ['key', 'value']
         }
       }
     },
-    required: ['amount', 'currency', 'datetime_iso', 'transaction_type', 'operator', 'card_last4', 'balance']
+    required: ['amount', 'currency', 'datetime_iso', 'transaction_type', 'operator', 'card_last4']
   },
   strict: true
 };
@@ -170,7 +214,12 @@ const TRANSACTION_TYPE_MAP = {
   credit: { type: 'Пополнение', income: true },
   p2p: { type: 'Перевод', income: false, isP2p: true },
   fee: { type: 'Комиссия', income: false },
-  refund: { type: 'Возврат', income: true }
+  refund: { type: 'Возврат', income: true },
+  payment: { type: 'Оплата', income: false },
+  withdrawal: { type: 'Списание', income: false },
+  deposit: { type: 'Пополнение', income: true },
+  transfer: { type: 'Перевод', income: false },
+  charge: { type: 'Платеж', income: false }
 };
 
 const UZUM_SMS_OTP_PREFIX = /^<#>\s*Uzum\s*bank\s+Podtverdite/i;
@@ -320,7 +369,36 @@ class ParserService {
     const messages = [
       {
         role: 'system',
-        content: 'Извлеки поля из банковского уведомления и верни строго JSON по схеме. Поле meta верни как массив объектов вида {"key": "<строка>", "value": "<значение>"}. Если дополнительных данных нет, верни пустой массив meta. Никакого текста вне JSON.'
+        content: `Извлеки поля из банковского уведомления и верни строго JSON по схеме.
+
+Требования к полям:
+- amount: число (обязательно), сумма транзакции
+- currency: строка (обязательно), валюта (например: UZS, USD, EUR)
+- datetime_iso: строка ISO 8601 (обязательно), дата и время транзакции
+- transaction_type: один из типов (обязательно):
+  * "debit" - списание/расход
+  * "credit" - пополнение/доход
+  * "payment" - оплата товаров/услуг
+  * "p2p" - перевод между физлицами
+  * "fee" - комиссия
+  * "refund" - возврат средств
+  * "withdrawal" - снятие наличных
+  * "deposit" - внесение наличных
+  * "transfer" - банковский перевод
+  * "charge" - платеж
+- operator: строка (обязательно), название продавца/получателя
+- card_last4: строка (обязательно), последние 4 цифры карты
+- balance: число или null (необязательно), остаток после операции
+- meta: массив объектов вида {"key": "<строка>", "value": "<значение>"} с доп. данными
+
+Правила определения типа транзакции:
+- Если сумма списана или потрачена → используй "debit" или "payment"
+- Если сумма получена или зачислена → используй "credit" или "deposit"
+- Если упоминается P2P, перевод между людьми → используй "p2p"
+- Если упоминается комиссия, fee → используй "fee"
+- Если баланс не указан в сообщении → верни null
+
+Никакого текста вне JSON.`
       },
       {
         role: 'user',
@@ -374,8 +452,23 @@ class ParserService {
     }
 
     const parsed = safeParseJson(trimmed);
-    const validated = validateTransactionPayload(parsed);
-    return this.normalizeLlmPayload(validated);
+
+    // Логируем распарсенный JSON для отладки
+    console.log('[parseWithLLM] GPT-4 Response:', JSON.stringify(parsed, null, 2));
+
+    try {
+      const validated = validateTransactionPayload(parsed);
+      return this.normalizeLlmPayload(validated);
+    } catch (validationError) {
+      // Улучшенное логирование ошибок валидации
+      console.error('[parseWithLLM] Validation failed:', {
+        error: validationError.message,
+        code: validationError.code,
+        rawGptResponse: parsed,
+        originalText: rawText
+      });
+      throw validationError;
+    }
   }
 
   normalizeLlmPayload(data) {

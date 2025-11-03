@@ -142,10 +142,18 @@ export const useOperatorsStore = create(
       saveOperator: async (operatorData) => {
         const { operators, editMode } = get();
 
+        // Преобразуем camelCase (фронтенд) -> формат бэкенда
+        const payload = {
+          canonicalName: operatorData.canonicalName,
+          appName: operatorData.appName,
+          isP2p: operatorData.isP2P, // Важно: isP2P (фронт) -> isP2p (бэк)
+          synonyms: operatorData.synonyms || []
+        };
+
         try {
           if (editMode === 'add') {
             // Добавляем нового оператора через API
-            const response = await operatorsAPI.create(operatorData);
+            const response = await operatorsAPI.create(payload);
             // Backend возвращает { success, message, data: operator }
             const rawOperator = response.data || response.operator || response;
 
@@ -169,7 +177,7 @@ export const useOperatorsStore = create(
             return { success: true, operator: newOperator };
           } else if (editMode === 'edit') {
             // Обновляем существующего оператора через API
-            const response = await operatorsAPI.update(operatorData.id, operatorData);
+            const response = await operatorsAPI.update(operatorData.id, payload);
             const rawOperator = response.data || response.operator || response;
 
             // Нормализуем snake_case -> camelCase

@@ -54,29 +54,30 @@ class OperatorController {
    */
   async create(req, res) {
     try {
-      const { pattern, appName, isP2p } = req.body;
+      const { canonicalName, appName, isP2p, synonyms } = req.body;
 
       // Валидация
-      if (!pattern || !appName) {
+      if (!canonicalName || !appName) {
         return res.status(400).json({
           success: false,
-          error: 'Необходимо указать паттерн и название приложения'
+          error: 'Необходимо указать каноническое имя и название приложения'
         });
       }
 
       // Проверка на существование паттерна
-      const exists = await Operator.patternExists(pattern);
+      const exists = await Operator.patternExists(canonicalName);
       if (exists) {
         return res.status(409).json({
           success: false,
-          error: 'Оператор с таким паттерном уже существует'
+          error: 'Оператор с таким именем уже существует'
         });
       }
 
       const newOperator = await Operator.create({
-        pattern,
+        canonicalName,
         appName,
-        isP2p
+        isP2p,
+        synonyms: synonyms || []
       });
 
       res.status(201).json({
@@ -98,30 +99,31 @@ class OperatorController {
    */
   async update(req, res) {
     try {
-      const { pattern, appName, isP2p } = req.body;
+      const { canonicalName, appName, isP2p, synonyms } = req.body;
       const id = req.params.id;
 
       // Валидация
-      if (!pattern || !appName) {
+      if (!canonicalName || !appName) {
         return res.status(400).json({
           success: false,
-          error: 'Необходимо указать паттерн и название приложения'
+          error: 'Необходимо указать каноническое имя и название приложения'
         });
       }
 
       // Проверка на существование паттерна (исключая текущий)
-      const exists = await Operator.patternExists(pattern, id);
+      const exists = await Operator.patternExists(canonicalName, id);
       if (exists) {
         return res.status(409).json({
           success: false,
-          error: 'Оператор с таким паттерном уже существует'
+          error: 'Оператор с таким именем уже существует'
         });
       }
 
       const updatedOperator = await Operator.update(id, {
-        pattern,
+        canonicalName,
         appName,
-        isP2p
+        isP2p,
+        synonyms: synonyms || []
       });
 
       if (!updatedOperator) {

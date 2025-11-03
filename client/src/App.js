@@ -262,15 +262,15 @@ function MainAppShell({ resolvedTheme }) {
       }
     },
 
-    // Переключить плотность ячеек
-    'Ctrl+Alt+D': () => {
+    // Переключить плотность ячеек (FIX: Changed from Cmd+Alt+D to avoid macOS Dock conflict)
+    'Ctrl+Shift+D': () => {
       if (currentView === 'checks') {
         cycleCellDensity();
         const labels = { compact: 'Компактный', standard: 'Стандарт', large: 'Крупный' };
         toast.info(`Плотность: ${labels[useFiltersStore.getState().cellDensity]}`);
       }
     },
-    'Cmd+Alt+D': () => {
+    'Cmd+Shift+D': () => {
       if (currentView === 'checks') {
         cycleCellDensity();
         const labels = { compact: 'Компактный', standard: 'Стандарт', large: 'Крупный' };
@@ -301,12 +301,11 @@ function MainAppShell({ resolvedTheme }) {
     },
 
     // patch-016 §13: Ctrl/Cmd+S — сохранить (на самом деле автосохранение)
-    'Ctrl+S': (e) => {
-      e.preventDefault();
+    // FIX: preventDefault уже вызывается в useHotkeys, дублирование убрано
+    'Ctrl+S': () => {
       toast.info('Изменения сохраняются автоматически', { autoClose: 2000 });
     },
-    'Cmd+S': (e) => {
-      e.preventDefault();
+    'Cmd+S': () => {
       toast.info('Изменения сохраняются автоматически', { autoClose: 2000 });
     },
 

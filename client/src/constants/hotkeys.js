@@ -167,7 +167,7 @@ export const HOTKEY_GROUPS = [
       },
       {
         id: 'view.density',
-        shortcut: 'Ctrl/Cmd+Alt+D',
+        shortcut: 'Ctrl/Cmd+Shift+D',
         description: 'Переключить плотность строк',
       },
       {

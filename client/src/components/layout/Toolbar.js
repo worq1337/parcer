@@ -34,6 +34,7 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
 
   // FIX: Use useRef instead of window.searchDebounce for proper cleanup
   const searchDebounceRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   // Обработчик быстрого поиска с debounce
   const handleSearchChange = (e) => {
@@ -520,6 +521,7 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
               color="var(--color-text-secondary)"
             />
             <input
+              ref={searchInputRef}
               type="text"
               className="search-input"
               placeholder="Быстрый поиск по таблице..."
@@ -531,7 +533,9 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
                 className="search-clear"
                 onClick={() => {
                   setQuickSearch('');
-                  document.querySelector('.search-input').value = '';
+                  if (searchInputRef.current) {
+                    searchInputRef.current.value = '';
+                  }
                 }}
                 title="Очистить"
               >

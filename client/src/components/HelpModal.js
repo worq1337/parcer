@@ -69,7 +69,7 @@ const HelpModal = ({ isOpen, onClose }) => {
       category: 'Формат и вид',
       items: [
         { keys: [cmdKey, 'Shift', 'F'], description: 'Открыть фильтры' },
-        { keys: [cmdKey, 'Alt', 'D'], description: 'Переключить плотность' },
+        { keys: [cmdKey, 'Shift', 'D'], description: 'Переключить плотность' },
         { keys: [cmdKey, 'Alt', 'M'], description: 'Объединить ячейки' },
         { keys: [cmdKey, 'Alt', 'U'], description: 'Разъединить ячейки' },
         { keys: ['Alt', 'Dbl Click'], description: 'Авто-ширина всех колонок' },

@@ -38,6 +38,8 @@ export const useFiltersStore = create(
         order: [],
         hidden: [],
         frozen: [],
+        alignment: {},  // { fieldName: 'left'|'center'|'right' }
+        wrapText: {},   // { fieldName: true|false }
       },
 
       // Плотность ячеек
@@ -236,6 +238,28 @@ export const useFiltersStore = create(
           };
         }),
 
+      setColumnAlignment: (field, alignment) =>
+        set((state) => ({
+          columnSettings: {
+            ...state.columnSettings,
+            alignment: {
+              ...state.columnSettings.alignment,
+              [field]: alignment,
+            },
+          },
+        })),
+
+      setColumnWrapText: (field, wrap) =>
+        set((state) => ({
+          columnSettings: {
+            ...state.columnSettings,
+            wrapText: {
+              ...state.columnSettings.wrapText,
+              [field]: wrap,
+            },
+          },
+        })),
+
       resetColumnSettings: () =>
         set((state) => ({
           columnSettings: {
@@ -243,6 +267,8 @@ export const useFiltersStore = create(
             order: [],
             hidden: [],
             frozen: [],
+            alignment: {},
+            wrapText: {},
           },
         })),
 

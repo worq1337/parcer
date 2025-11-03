@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import Icon from '../icons/Icon';
+import { useFiltersStore } from '../../state/filtersStore';
 import '../../styles/ColumnMenu.css';
 
 /**
@@ -16,7 +17,7 @@ import '../../styles/ColumnMenu.css';
  * 6. Заморозить ▸ Слева до текущей • Снять заморозку
  * 7. Сброс настроек этой колонки
  */
-const ColumnMenu = ({ column, api, position, onClose, showTotalsRow, onToggleTotalsRow }) => {
+const ColumnMenu = ({ column, api, position, onClose, showTotalsRow, onToggleTotalsRow, onShowColumnVisibility }) => {
   const menuRef = useRef(null);
   const [activeSubmenu, setActiveSubmenu] = useState(null);
 
@@ -25,8 +26,13 @@ const ColumnMenu = ({ column, api, position, onClose, showTotalsRow, onToggleTot
   const field = colDef?.field;
   const headerName = colDef?.headerName || field;
 
-  // patch-011 §3: Получаем текущее выравнивание из cellStyle
-  const currentAlignment = colDef?.cellStyle?.textAlign || 'left';
+  // Get current settings from filtersStore
+  const columnSettings = useFiltersStore((state) => state.columnSettings);
+  const setColumnAlignment = useFiltersStore((state) => state.setColumnAlignment);
+  const setColumnWrapText = useFiltersStore((state) => state.setColumnWrapText);
+
+  const currentAlignment = columnSettings.alignment[field] || 'left';
+  const currentWrapText = columnSettings.wrapText[field] || false;
 
   // Закрываем меню при клике вне его
   useEffect(() => {
@@ -70,14 +76,31 @@ const ColumnMenu = ({ column, api, position, onClose, showTotalsRow, onToggleTot
   };
 
   const handleAlignment = (align) => {
-    toast.info(`Выравнивание "${align}" - будет сохранено в настройках колонки`);
-    // TODO: Сохранить в filtersStore.columnSettings[field].alignment
+    if (!field) return;
+
+    setColumnAlignment(field, align);
+
+    // Force grid refresh
+    if (api) {
+      api.refreshCells({ force: true });
+    }
+
+    toast.success(`Выравнивание установлено: ${align === 'left' ? 'влево' : align === 'center' ? 'по центру' : 'вправо'}`);
     onClose();
   };
 
   const handleWrapText = () => {
-    toast.info('Переключение переноса по словам - будет сохранено в настройках');
-    // TODO: Переключить в filtersStore.columnSettings[field].wrapText
+    if (!field) return;
+
+    const newWrapValue = !currentWrapText;
+    setColumnWrapText(field, newWrapValue);
+
+    // Force grid refresh
+    if (api) {
+      api.refreshCells({ force: true });
+    }
+
+    toast.success(`Перенос по словам ${newWrapValue ? 'включён' : 'выключен'}`);
     onClose();
   };
 
@@ -162,8 +185,9 @@ const ColumnMenu = ({ column, api, position, onClose, showTotalsRow, onToggleTot
   };
 
   const handleShowHideColumns = () => {
-    toast.info('Диалог показа/скрытия колонок - будет реализован в §8');
-    // TODO: Открыть модал с чекбоксами всех колонок
+    if (onShowColumnVisibility) {
+      onShowColumnVisibility();
+    }
     onClose();
   };
 
@@ -291,7 +315,10 @@ const ColumnMenu = ({ column, api, position, onClose, showTotalsRow, onToggleTot
 
       {/* 4. Перенос по словам */}
       {supportsWrap && (
-        <button className="menu-item" onClick={handleWrapText}>
+        <button className={`menu-item ${currentWrapText ? 'menu-item-checked' : ''}`} onClick={handleWrapText}>
+          <span className="unified-menu-item-checkmark">
+            {currentWrapText && '✓'}
+          </span>
           <Icon name="more_horiz" size={16} />
           <span>Перенос по словам</span>
         </button>

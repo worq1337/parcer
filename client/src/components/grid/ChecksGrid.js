@@ -27,6 +27,7 @@ import {
 import Icon from '../icons/Icon';
 import ColumnMenuButton from './ColumnMenuButton';
 import ColumnMenu from './ColumnMenu';
+import ColumnVisibilityModal from '../ColumnVisibilityModal';
 import '../../styles/ChecksGrid.css';
 
 const InfoButtonRenderer = (params) => {
@@ -1056,6 +1057,8 @@ const ChecksGrid = ({
     position: null,
   });
 
+  const [showColumnVisibilityModal, setShowColumnVisibilityModal] = useState(false);
+
   // patch-010 §4: Состояние для строки итогов
   const [showTotalsRow, setShowTotalsRow] = useState(false);
   const [pinnedBottomRowData, setPinnedBottomRowData] = useState([]);
@@ -1097,9 +1100,10 @@ const ChecksGrid = ({
   // }, [loadChecks]);
 
   // Применение фильтров
+  // FIX: Убраны избыточные зависимости - applyFilters сам использует все фильтры из store
   const filteredChecks = useMemo(() => {
     return applyFilters(checks);
-  }, [checks, p2pFilter, currencyFilter, quickSearch, dateFilter, textFilters, numericFilters, applyFilters]);
+  }, [checks, applyFilters]);
 
   // patch-013: Передаем gridApi наружу через ref
   useEffect(() => {
@@ -1239,10 +1243,18 @@ const ChecksGrid = ({
       userStyle.backgroundColor ||
       null;
 
+    // Get column-level settings from filtersStore (applied to all cells in column)
+    const columnAlignment = columnSettings.alignment[field];
+    const columnWrapText = columnSettings.wrapText[field];
+
     const mergedStyle = {
       ...baseStyle,
       ...(resolvedBackgroundColor && { backgroundColor: resolvedBackgroundColor }),
+      // Apply column-level alignment first, then cell-level (cell-level takes precedence)
+      ...(columnAlignment && { textAlign: columnAlignment }),
       ...(userStyle.alignment && { textAlign: userStyle.alignment }),
+      // Apply column-level wrap first, then cell-level (cell-level takes precedence)
+      ...(columnWrapText && { whiteSpace: 'normal', wordWrap: 'break-word' }),
       ...(userStyle.wrapText && { whiteSpace: 'normal', wordWrap: 'break-word' }),
     };
 
@@ -1254,7 +1266,7 @@ const ChecksGrid = ({
     }
 
     return mergedStyle;
-  }, [getCellStyle, resolvedTheme, selectedCellKeySet]);
+  }, [getCellStyle, resolvedTheme, selectedCellKeySet, columnSettings]);
 
   const computeSelectionKeys = useCallback((anchor, focus, api) => {
     if (!anchor || !focus || !api) return [];
@@ -3326,6 +3338,16 @@ const ChecksGrid = ({
               onClose={handleCloseColumnMenu}
               showTotalsRow={showTotalsRow}
               onToggleTotalsRow={handleToggleTotalsRow}
+              onShowColumnVisibility={() => setShowColumnVisibilityModal(true)}
+            />
+          )}
+
+          {showColumnVisibilityModal && (
+            <ColumnVisibilityModal
+              isOpen={showColumnVisibilityModal}
+              onClose={() => setShowColumnVisibilityModal(false)}
+              columnDefs={columnDefs}
+              api={gridRef.current?.api}
             />
           )}
 

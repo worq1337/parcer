@@ -8,12 +8,13 @@ import '../../styles/StatusBar.css';
  * Строка состояния с агрегатными данными
  * Согласно patch.md §2.3
  */
-const StatusBar = ({ selectedCells = [] }) => {
+const StatusBar = ({ selectedCells = [], filteredChecks }) => {
   const checks = useChecksStore((state) => state.checks);
   const { p2pFilter, currencyFilter, quickSearch, advancedFilters } = useFiltersStore();
 
-  // Применяем фильтры
-  const filteredChecks = useFiltersStore.getState().applyFilters(checks);
+  // FIX: Принимаем filteredChecks как prop чтобы избежать двойной фильтрации
+  // Если не передан, используем все чеки (для обратной совместимости)
+  const displayChecks = filteredChecks || checks;
 
   // Вычисляем агрегаты для выделенных ячеек
   const aggregates = React.useMemo(() => {
@@ -38,7 +39,7 @@ const StatusBar = ({ selectedCells = [] }) => {
       <div className="status-section">
         <span className="status-item">
           <strong>Строк:</strong>{' '}
-          {filteredChecks.length.toLocaleString('ru-RU')} / {checks.length.toLocaleString('ru-RU')}
+          {displayChecks.length.toLocaleString('ru-RU')} / {checks.length.toLocaleString('ru-RU')}
         </span>
 
         {activeFiltersCount > 0 && (

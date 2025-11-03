@@ -19,8 +19,6 @@ const FiltersPanel = ({ isOpen, onClose, scrollToSection }) => {
     setDateFilter,
     textFilters,
     updateTextFilter,
-    numericFilters,
-    updateNumericFilter,
     clearAllFilters,
     getActiveFiltersCount,
     saveFilterSet,
@@ -164,7 +162,6 @@ const FiltersPanel = ({ isOpen, onClose, scrollToSection }) => {
         currencyFilter,
         dateFilter,
         textFilters,
-        numericFilters,
       });
       setSaveSetName('');
       setShowSaveDialog(false);

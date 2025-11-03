@@ -29,7 +29,6 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
   // patch-008 §9: Настройки из settingsStore
   const { numberFormatting, updateNumberFormatting, resetViewSettings } = useSettingsStore();
 
-  const [showDensityMenu, setShowDensityMenu] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false); // patch-006 §11
   const [showViewMenu, setShowViewMenu] = useState(false); // patch-006 §12
 
@@ -577,11 +576,10 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
       />
 
       {/* Закрытие выпадающих меню при клике вне */}
-      {(showDensityMenu || showFileMenu || showViewMenu) && (
+      {(showFileMenu || showViewMenu) && (
         <div
           className="dropdown-overlay"
           onClick={() => {
-            setShowDensityMenu(false);
             setShowFileMenu(false);
             setShowViewMenu(false);
           }}

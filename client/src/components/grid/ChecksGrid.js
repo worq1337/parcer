@@ -1230,7 +1230,7 @@ const ChecksGrid = ({
 
   // patch-012: Функция для применения пользовательских стилей к ячейкам
   const applyCellStyle = useCallback((params, baseStyle = {}) => {
-    if (!params || !params.data || !params.colDef) return baseStyle;
+    if (!params || !params.data || !params.colDef || !params.colDef.field) return baseStyle;
 
     const checkId = params.data.id;
     const rowNodeId = params.node?.id ?? checkId;
@@ -1518,15 +1518,17 @@ const ChecksGrid = ({
       },
       wrapText: cellDensity === 'large', // patch-007 §2
       autoHeight: cellDensity === 'large', // patch-007 §2
-      cellStyle: (params) =>
-        applyCellStyle(params, {
+      cellStyle: (params) => {
+        if (!params || !params.data) return {};
+        return applyCellStyle(params, {
           color: params.value ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
           fontWeight: params.value ? '500' : '400',
           fontStyle: params.value ? 'normal' : 'italic',
           whiteSpace: cellDensity === 'large' ? 'normal' : 'nowrap',
           overflow: cellDensity === 'large' ? 'visible' : 'hidden',
           textOverflow: cellDensity === 'large' ? 'clip' : 'ellipsis',
-        }),
+        });
+      },
       tooltipField: 'app', // patch-007 §2
     },
     {

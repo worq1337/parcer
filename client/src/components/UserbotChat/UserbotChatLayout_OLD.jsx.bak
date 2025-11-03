@@ -1,0 +1,82 @@
+import React from 'react';
+import BotsList from './BotsList';
+import ChatPanel from './ChatPanel';
+import { useUserbotChat } from '../../hooks/useUserbotChat';
+import '../../styles/UserbotChat.css';
+
+/**
+ * Main Userbot Chat Layout component
+ * Manages chat functionality for userbot messages
+ */
+const UserbotChatLayout = () => {
+
+  const {
+    // State
+    bots,
+    selectedBotId,
+    messages,
+    botsLoading,
+    messagesLoading,
+    refreshing,
+    loadingMore,
+    hasMore,
+    statusFilter,
+    selectedMessages,
+    loadOlder,
+
+    // Actions
+    selectBot,
+    changeStatusFilter,
+    refresh,
+    processMessage,
+    processMultiple,
+    retryMessage,
+    toggleMessageSelection,
+    selectAll,
+    clearSelection
+  } = useUserbotChat();
+
+  // Find currently selected bot
+  const selectedBot = bots.find(bot => bot.id === selectedBotId);
+
+  // Handle bulk processing
+  const handleProcessSelected = () => {
+    if (selectedMessages.size === 0) return;
+
+    const messageIds = Array.from(selectedMessages);
+    processMultiple(messageIds);
+  };
+
+  return (
+    <div className="userbot-chat-layout">
+      <BotsList
+        bots={bots}
+        selectedBotId={selectedBotId}
+        onSelectBot={selectBot}
+        loading={botsLoading}
+      />
+
+      <ChatPanel
+        bot={selectedBot}
+        messages={messages}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadOlder={loadOlder}
+        statusFilter={statusFilter}
+        onChangeFilter={changeStatusFilter}
+        selectedMessages={selectedMessages}
+        onToggleSelection={toggleMessageSelection}
+        onSelectAll={selectAll}
+        onClearSelection={clearSelection}
+        onProcessMessage={processMessage}
+        onProcessSelected={handleProcessSelected}
+        onRetryMessage={retryMessage}
+        onRefresh={refresh}
+        refreshing={refreshing}
+        loading={messagesLoading}
+      />
+    </div>
+  );
+};
+
+export default UserbotChatLayout;

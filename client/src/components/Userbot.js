@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import Icon from './icons/Icon';
 import UserbotChatLayout from './UserbotChat/UserbotChatLayout';
@@ -14,7 +14,7 @@ const Userbot = ({ onClose }) => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loginStep, setLoginStep] = useState('phone'); // phone, code, password, authorized
-  const [activeTab, setActiveTab] = useState('control'); // control, chat
+  const [activeTab, setActiveTab] = useState('chat'); // control, chat - default to chat to show new interface
   const [phoneNumber, setPhoneNumber] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -23,6 +23,12 @@ const Userbot = ({ onClose }) => {
     { id: 856264490, name: 'ID:856264490', username: '(недоступен)' },
     { id: 7028509569, name: 'NBU Card', username: '@NBUCard_bot' }
   ]);
+
+  // FIX: Use ref to store current loginStep for interval closure
+  const loginStepRef = useRef(loginStep);
+  useEffect(() => {
+    loginStepRef.current = loginStep;
+  }, [loginStep]);
 
   // Загрузка статуса при монтировании
   useEffect(() => {
@@ -33,13 +39,13 @@ const Userbot = ({ onClose }) => {
   useEffect(() => {
     const interval = setInterval(() => {
       // Не обновлять статус если пользователь вводит код или пароль
-      // Проверяем loginStep внутри интервала, а не в зависимостях
-      if (loginStep !== 'code' && loginStep !== 'password') {
+      // Используем ref для получения актуального значения loginStep
+      if (loginStepRef.current !== 'code' && loginStepRef.current !== 'password') {
         loadStatus();
       }
     }, 15000);
     return () => clearInterval(interval);
-  }, []); // FIXED: Пустой массив - интервал создается один раз!
+  }, []); // Интервал создается один раз, использует ref
 
   // ESC для закрытия
   useEffect(() => {

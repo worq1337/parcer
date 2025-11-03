@@ -1066,7 +1066,9 @@ const ChecksGrid = ({
     loading,
     loadChecks,
     deleteCheck,
+    deleteChecks,
     updateCheck,
+    updateChecks,
     addCheck,
   } = useChecksStore();
 
@@ -1088,9 +1090,11 @@ const ChecksGrid = ({
     addCellMerge,
     removeCellMerge,
   } = useFiltersStore();
-  useEffect(() => {
-    loadChecks();
-  }, [loadChecks]);
+
+  // FIX: Remove duplicate loadChecks() - already called in App.js
+  // useEffect(() => {
+  //   loadChecks();
+  // }, [loadChecks]);
 
   // Применение фильтров
   const filteredChecks = useMemo(() => {
@@ -1407,7 +1411,7 @@ const ChecksGrid = ({
       filter: 'agNumberColumnFilter',
       pinned: 'left',
       cellClass: 'cell-number',
-      readOnly: true,
+      editable: false,
       checkboxSelection: true,
       headerCheckboxSelection: true,
       sortable: false, // patch-017 §3: нельзя сортировать по порядковому номеру
@@ -1444,7 +1448,7 @@ const ChecksGrid = ({
       width: columnSettings.widths['weekday'] || 56,
       filter: 'agTextColumnFilter',
       cellClass: 'cell-centered',
-      readOnly: true, // Вычисляемое поле
+      editable: false,
       cellStyle: (params) =>
         applyCellStyle(params, {
           color: 'var(--color-text-secondary)',
@@ -1456,7 +1460,7 @@ const ChecksGrid = ({
       field: 'date_display',
       width: columnSettings.widths['date_display'] || 84,
       filter: 'agTextColumnFilter',
-      readOnly: true,
+      editable: false,
       cellClass: 'cell-monospace',
     },
     {
@@ -1464,7 +1468,7 @@ const ChecksGrid = ({
       field: 'time_display',
       width: columnSettings.widths['time_display'] || 72,
       filter: 'agTextColumnFilter',
-      readOnly: true,
+      editable: false,
       cellClass: 'cell-monospace',
     },
     {
@@ -1682,7 +1686,7 @@ const ChecksGrid = ({
       pinned: 'right',
       sortable: false,
       filter: false,
-      readOnly: true,
+      editable: false,
       suppressNavigable: true,
       resizable: false,
       cellRenderer: InfoButtonRenderer,
@@ -1719,19 +1723,7 @@ const ChecksGrid = ({
     suppressHeaderMenuButton: true, // patch-010 §1: Отключаем встроенное меню AG Grid
     headerComponent: CustomHeaderComponent, // patch-010 §1: Кастомный заголовок
     cellStyle: (params) => applyCellStyle(params),
-    editable: (params) => {
-      const { colDef } = params;
-      if (colDef.readOnly) {
-        return false;
-      }
-      if (typeof colDef.editable === 'function') {
-        return colDef.editable(params);
-      }
-      if (typeof colDef.editable === 'boolean') {
-        return colDef.editable;
-      }
-      return true;
-    },
+    editable: true,
   }), [CustomHeaderComponent, applyCellStyle]);
 
   // Обработчики для контекстного меню (patch-003)
@@ -2086,10 +2078,31 @@ const ChecksGrid = ({
   const handleDelete = useCallback((params, type, options = {}) => {
     const { silent = false } = options;
     if (type === 'row') {
-      if (window.confirm('Вы уверены, что хотите удалить этот чек?')) {
-        deleteCheck(params.node.data.id);
-        if (!silent) {
-          toast.success('Чек удалён');
+      // Проверяем, есть ли выбранные строки
+      const selectedRows = params.api?.getSelectedRows() || [];
+      const selectedCount = selectedRows.length;
+
+      // Если выбрано больше 1 строки, удаляем все выбранные
+      if (selectedCount > 1) {
+        if (window.confirm(`Вы уверены, что хотите удалить ${selectedCount} выбранных чеков?`)) {
+          const ids = selectedRows.map(row => row.id);
+          deleteChecks(ids).then(() => {
+            if (!silent) {
+              toast.success(`Удалено ${selectedCount} чеков`);
+            }
+            params.api.deselectAll();
+          }).catch(error => {
+            console.error('Error deleting selected checks:', error);
+            toast.error(`Ошибка при удалении: ${error.message}`);
+          });
+        }
+      } else {
+        // Удаляем только текущую строку
+        if (window.confirm('Вы уверены, что хотите удалить этот чек?')) {
+          deleteCheck(params.node.data.id);
+          if (!silent) {
+            toast.success('Чек удалён');
+          }
         }
       }
     } else if (type === 'content') {
@@ -2098,7 +2111,61 @@ const ChecksGrid = ({
         toast.success('Содержимое ячейки удалено');
       }
     }
-  }, [deleteCheck]);
+  }, [deleteCheck, deleteChecks]);
+
+  // Массовое удаление выбранных строк
+  const handleBulkDelete = useCallback(async () => {
+    const selectedRows = gridRef.current?.api.getSelectedRows() || [];
+    if (selectedRows.length === 0) {
+      toast.info('Нет выбранных чеков');
+      return;
+    }
+
+    if (window.confirm(`Вы уверены, что хотите удалить ${selectedRows.length} чеков?`)) {
+      try {
+        const ids = selectedRows.map(row => row.id);
+        await deleteChecks(ids);
+        toast.success(`Удалено ${selectedRows.length} чеков`);
+        gridRef.current?.api.deselectAll();
+      } catch (error) {
+        console.error('Error in bulk delete:', error);
+        toast.error(`Ошибка при удалении: ${error.message}`);
+      }
+    }
+  }, [deleteChecks]);
+
+  // Массовое обновление выбранных строк
+  const handleBulkUpdate = useCallback(async (field, value) => {
+    const selectedRows = gridRef.current?.api.getSelectedRows() || [];
+    if (selectedRows.length === 0) {
+      toast.info('Нет выбранных чеков');
+      return;
+    }
+
+    if (window.confirm(`Обновить поле "${field}" для ${selectedRows.length} чеков?`)) {
+      try {
+        const updates = selectedRows.map(row => ({
+          id: row.id,
+          data: { [field]: value }
+        }));
+        await updateChecks(updates);
+        toast.success(`Обновлено ${selectedRows.length} чеков`);
+
+        // Refresh grid
+        selectedRows.forEach(row => {
+          const node = gridRef.current?.api.getRowNode(String(row.id));
+          if (node) {
+            node.setDataValue(field, value);
+          }
+        });
+
+        gridRef.current?.api.deselectAll();
+      } catch (error) {
+        console.error('Error in bulk update:', error);
+        toast.error(`Ошибка при обновлении: ${error.message}`);
+      }
+    }
+  }, [updateChecks]);
 
   const handleSort = useCallback((params, direction) => {
     if (!params?.column || !params?.api) return;
@@ -2609,6 +2676,61 @@ const ChecksGrid = ({
 
     // patch-014: Убрали "Вставить строку выше/ниже", оставили только Удалить
     pushSeparator();
+
+    // Проверка количества выбранных строк для массовых операций
+    const selectedRowsCount = params.api?.getSelectedRows()?.length || 0;
+
+    if (selectedRowsCount > 1) {
+      // Массовые операции (показываются только когда выбрано >1 строки)
+      items.push(
+        {
+          name: `Удалить выбранные строки (${selectedRowsCount})`,
+          action: () => handleBulkDelete(),
+        },
+        {
+          name: `Изменить выбранные строки (${selectedRowsCount})`,
+          submenu: [
+            {
+              name: 'Изменить оператора',
+              action: () => {
+                const value = prompt('Введите нового оператора:');
+                if (value !== null) handleBulkUpdate('operator', value);
+              },
+            },
+            {
+              name: 'Изменить приложение',
+              action: () => {
+                const value = prompt('Введите новое приложение:');
+                if (value !== null) handleBulkUpdate('app', value);
+              },
+            },
+            {
+              name: 'Изменить тип транзакции',
+              action: () => {
+                const value = prompt('Введите новый тип транзакции:');
+                if (value !== null) handleBulkUpdate('transaction_type', value);
+              },
+            },
+            {
+              name: 'Изменить валюту',
+              action: () => {
+                const value = prompt('Введите новую валюту (UZS, USD, EUR):');
+                if (value !== null) handleBulkUpdate('currency', value);
+              },
+            },
+            {
+              name: 'Изменить источник',
+              action: () => {
+                const value = prompt('Введите новый источник (SMS, Telegram, Manual):');
+                if (value !== null) handleBulkUpdate('source', value);
+              },
+            },
+          ],
+        },
+      );
+      pushSeparator();
+    }
+
     items.push(
       {
         name: 'Удалить строку',

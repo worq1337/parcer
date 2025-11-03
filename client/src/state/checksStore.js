@@ -98,6 +98,74 @@ export const useChecksStore = create((set, get) => ({
     }
   },
 
+  // Массовое удаление чеков
+  deleteChecks: async (ids) => {
+    try {
+      const idsArray = Array.isArray(ids) ? ids : [ids];
+      if (idsArray.length === 0) return;
+
+      // Delete each check sequentially
+      const errors = [];
+      for (const id of idsArray) {
+        try {
+          await checksAPI.delete(id);
+        } catch (error) {
+          console.error(`Error deleting check ${id}:`, error);
+          errors.push({ id, error });
+        }
+      }
+
+      // Update state to remove all successfully deleted checks
+      set((state) => ({
+        checks: state.checks.filter((check) => !idsArray.includes(check.id)),
+      }));
+
+      if (errors.length > 0) {
+        throw new Error(`Failed to delete ${errors.length} of ${idsArray.length} checks`);
+      }
+    } catch (error) {
+      console.error('Error in bulk delete:', error);
+      throw error;
+    }
+  },
+
+  // Массовое обновление чеков
+  updateChecks: async (updates) => {
+    try {
+      if (!Array.isArray(updates) || updates.length === 0) return;
+
+      const errors = [];
+      const updatedChecks = [];
+
+      for (const { id, data } of updates) {
+        try {
+          const updated = await checksAPI.update(id, data);
+          updatedChecks.push(updated);
+        } catch (error) {
+          console.error(`Error updating check ${id}:`, error);
+          errors.push({ id, error });
+        }
+      }
+
+      // Update state with successfully updated checks
+      set((state) => ({
+        checks: state.checks.map((check) => {
+          const updated = updatedChecks.find((u) => u.id === check.id);
+          return updated || check;
+        }),
+      }));
+
+      if (errors.length > 0) {
+        throw new Error(`Failed to update ${errors.length} of ${updates.length} checks`);
+      }
+
+      return updatedChecks;
+    } catch (error) {
+      console.error('Error in bulk update:', error);
+      throw error;
+    }
+  },
+
   // Управление выделением
   setSelectedRows: (selectedRows) => set({ selectedRows }),
 

@@ -2,12 +2,14 @@ const express = require('express');
 const router = express.Router();
 const QueueEvent = require('../models/QueueEvent');
 const Backup = require('../models/Backup');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const util = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 const EventEmitter = require('events');
 const execPromise = util.promisify(exec);
+const multer = require('multer');
+const os = require('os');
 
 // patch-016 §7: EventEmitter для SSE уведомлений о событиях очереди
 const queueEventEmitter = new EventEmitter();
@@ -187,13 +189,70 @@ router.post('/backup', async (req, res) => {
     const dbUser = process.env.DB_USER || 'postgres';
     const dbPassword = process.env.DB_PASSWORD || 'postgres';
 
-    // Создаём команду для pg_dump
-    const dumpCommand = `PGPASSWORD="${dbPassword}" pg_dump -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} --clean --if-exists | gzip > ${filePath}`;
-
     console.log(`Creating backup: ${filename}`);
 
-    // Выполняем дамп
-    await execPromise(dumpCommand);
+    // SECURITY FIX: Use spawn() instead of shell concatenation to prevent injection
+    const pgDumpArgs = [
+      '-h', dbHost,
+      '-p', String(dbPort),
+      '-U', dbUser,
+      '-d', dbName,
+      '--clean',
+      '--if-exists'
+    ];
+
+    // Execute pg_dump and pipe through gzip using spawn()
+    await new Promise((resolve, reject) => {
+      const pgDump = spawn('pg_dump', pgDumpArgs, {
+        env: { ...process.env, PGPASSWORD: dbPassword },
+        timeout: 600000 // 10 minutes
+      });
+
+      const gzip = spawn('gzip');
+      const fileStream = require('fs').createWriteStream(filePath);
+
+      // Pipe: pg_dump stdout -> gzip stdin
+      pgDump.stdout.pipe(gzip.stdin);
+
+      // Pipe: gzip stdout -> file
+      gzip.stdout.pipe(fileStream);
+
+      let stderrPgDump = '';
+      let stderrGzip = '';
+
+      pgDump.stderr.on('data', (data) => {
+        stderrPgDump += data.toString();
+      });
+
+      gzip.stderr.on('data', (data) => {
+        stderrGzip += data.toString();
+      });
+
+      pgDump.on('error', (err) => {
+        reject(new Error(`pg_dump failed: ${err.message}`));
+      });
+
+      gzip.on('error', (err) => {
+        reject(new Error(`gzip failed: ${err.message}`));
+      });
+
+      fileStream.on('error', (err) => {
+        reject(new Error(`File write failed: ${err.message}`));
+      });
+
+      fileStream.on('finish', async () => {
+        if (stderrPgDump) {
+          console.warn('pg_dump warnings:', stderrPgDump);
+        }
+        resolve();
+      });
+
+      pgDump.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`pg_dump exited with code ${code}: ${stderrPgDump}`));
+        }
+      });
+    });
 
     // Получаем размер файла
     const stats = await fs.stat(filePath);
@@ -276,6 +335,150 @@ router.delete('/backup/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting backup:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Configure multer for file upload (restore endpoint)
+const upload = multer({ dest: os.tmpdir() });
+
+/**
+ * POST /admin/restore
+ * Restore database from uploaded backup file (.sql or .sql.gz)
+ * SECURITY: Use spawn() instead of shell concatenation
+ */
+router.post('/restore', upload.single('backup'), async (req, res) => {
+  let uploadedFilePath = null;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No backup file provided. Please upload a .sql or .sql.gz file.'
+      });
+    }
+
+    uploadedFilePath = req.file.path;
+    const originalFilename = req.file.originalname;
+
+    // Get database connection parameters
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbPort = process.env.DB_PORT || 5432;
+    const dbName = process.env.DB_NAME || 'receipt_parser';
+    const dbUser = process.env.DB_USER || 'postgres';
+    const dbPassword = process.env.DB_PASSWORD || 'postgres';
+
+    console.log(`Restoring database from: ${originalFilename}`);
+
+    // Determine if file is gzipped
+    const isGzipped = originalFilename.endsWith('.gz');
+
+    // Use spawn() for security (no shell injection)
+    const psqlArgs = [
+      `-h`, dbHost,
+      `-p`, String(dbPort),
+      `-U`, dbUser,
+      `-d`, dbName
+    ];
+
+    const psql = spawn('psql', psqlArgs, {
+      env: { ...process.env, PGPASSWORD: dbPassword },
+      timeout: 600000 // 10 minutes
+    });
+
+    let stderr = '';
+    psql.stderr.on('data', (data) => {
+      stderr += data.toString();
+      console.error(`psql stderr: ${data}`);
+    });
+
+    psql.stdout.on('data', (data) => {
+      console.log(`psql stdout: ${data}`);
+    });
+
+    // Handle input stream (gzipped or plain SQL)
+    if (isGzipped) {
+      const gunzip = spawn('gunzip', ['-c', uploadedFilePath]);
+      gunzip.stdout.pipe(psql.stdin);
+
+      gunzip.stderr.on('data', (data) => {
+        console.error(`gunzip stderr: ${data}`);
+      });
+
+      gunzip.on('error', (err) => {
+        console.error('gunzip error:', err);
+        psql.kill();
+      });
+    } else {
+      const fileStream = require('fs').createReadStream(uploadedFilePath);
+      fileStream.pipe(psql.stdin);
+
+      fileStream.on('error', (err) => {
+        console.error('File stream error:', err);
+        psql.kill();
+      });
+    }
+
+    // Handle psql process completion
+    psql.on('close', async (code) => {
+      // Clean up uploaded file
+      if (uploadedFilePath) {
+        try {
+          await fs.unlink(uploadedFilePath);
+        } catch (err) {
+          console.error('Error deleting temp file:', err);
+        }
+      }
+
+      if (code === 0) {
+        console.log('Database restored successfully');
+        res.json({
+          success: true,
+          message: `Database restored successfully from ${originalFilename}`
+        });
+      } else {
+        console.error(`psql exited with code ${code}`);
+        res.status(500).json({
+          success: false,
+          error: `Database restore failed with exit code ${code}. Check server logs for details.`,
+          details: stderr.substring(0, 500) // Limit error output
+        });
+      }
+    });
+
+    psql.on('error', async (err) => {
+      console.error('psql spawn error:', err);
+
+      // Clean up uploaded file
+      if (uploadedFilePath) {
+        try {
+          await fs.unlink(uploadedFilePath);
+        } catch (cleanupErr) {
+          console.error('Error deleting temp file:', cleanupErr);
+        }
+      }
+
+      res.status(500).json({
+        success: false,
+        error: `Failed to execute psql: ${err.message}`
+      });
+    });
+
+  } catch (error) {
+    console.error('Restore error:', error);
+
+    // Clean up uploaded file on error
+    if (uploadedFilePath) {
+      try {
+        await fs.unlink(uploadedFilePath);
+      } catch (cleanupErr) {
+        console.error('Error deleting temp file:', cleanupErr);
+      }
+    }
+
     res.status(500).json({
       success: false,
       error: error.message

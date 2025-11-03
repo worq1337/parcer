@@ -5,16 +5,17 @@ import { useEffect } from 'react';
  * Согласно patch-003 §8
  *
  * @param {Object} hotkeys - объект с горячими клавишами и обработчиками
- * @param {Array} deps - зависимости для useEffect
+ *   ВАЖНО: hotkeys должен быть мемоизирован (useMemo/useCallback) чтобы избежать пересоздания слушателя
  *
  * Пример использования:
- * useHotkeys({
+ * const hotkeysConfig = useMemo(() => ({
  *   'Ctrl+Shift+F': () => console.log('Open filters'),
  *   'Cmd+Shift+F': () => console.log('Open filters (Mac)'),
  *   'Ctrl+Alt+D': () => console.log('Toggle density'),
- * });
+ * }), [dependencies]);
+ * useHotkeys(hotkeysConfig);
  */
-const useHotkeys = (hotkeys, deps = []) => {
+const useHotkeys = (hotkeys) => {
   useEffect(() => {
     const handleKeyDown = (event) => {
       // Игнорируем события из input/textarea, если не указано иное
@@ -76,7 +77,7 @@ const useHotkeys = (hotkeys, deps = []) => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [hotkeys, ...deps]);
+  }, [hotkeys]); // FIX: Removed deps parameter - caller should memoize hotkeys object
 };
 
 export default useHotkeys;

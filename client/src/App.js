@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/App.css';
@@ -36,7 +36,7 @@ import { useAutoUpdater } from './hooks/useAutoUpdater'; // Auto-updater hook
  * Обновлен согласно patch-006-excel-parity-and-ux-cleanup.md
  * Добавлены горячие клавиши и справка
  */
-function App() {
+function MainAppShell({ resolvedTheme }) {
   const [currentView, setCurrentView] = useState('checks'); // checks, operators, settings, admin
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedCheck, setSelectedCheck] = useState(null);
@@ -47,11 +47,8 @@ function App() {
   const [isHotkeysModalOpen, setIsHotkeysModalOpen] = useState(false); // patch-010 §4
   const [showSplash, setShowSplash] = useState(true); // patch-021: Splash screen
   const [showUpdateBanner, setShowUpdateBanner] = useState(true); // patch-021: Update banner
-  const [isLicenseValid, setIsLicenseValid] = useState(false); // patch-022: License validation
-  const [showLicenseModal, setShowLicenseModal] = useState(false); // patch-022: License modal
 
   const { loadChecks, checks } = useChecksStore();
-  const resolvedTheme = useSettingsStore((state) => state.resolvedTheme);
   const { toggleFiltersPanel, cycleCellDensity, setFiltersPanelOpen, filtersPanelOpen } = useFiltersStore();
 
   // Рефы для методов ChecksGrid
@@ -60,30 +57,9 @@ function App() {
   const gridApiRef = useRef(null); // patch-013
   const formulaBarRef = useRef(null); // patch-013
 
-  // patch-022: Проверка лицензионного ключа при первом запуске
   useEffect(() => {
-    const licenseActivated = localStorage.getItem('licenseActivated');
-    if (licenseActivated === 'true') {
-      setIsLicenseValid(true);
-    } else {
-      setShowLicenseModal(true);
-    }
-  }, []);
-
-  // Загрузка данных при монтировании (только после активации лицензии)
-  useEffect(() => {
-    if (isLicenseValid) {
-      loadChecks();
-    }
-  }, [loadChecks, isLicenseValid]);
-
-  // Обработчик успешной валидации лицензии
-  const handleLicenseValidated = (isValid) => {
-    if (isValid) {
-      setIsLicenseValid(true);
-      setShowLicenseModal(false);
-    }
-  };
+    loadChecks();
+  }, [loadChecks]);
 
   // patch-017 §5: Инициализация notification service
   useEffect(() => {
@@ -134,7 +110,6 @@ function App() {
     isDownloading,
     downloadProgress,
     isUpdateDownloaded,
-    checkForUpdates,
     downloadUpdate,
     installUpdate,
   } = useAutoUpdater();
@@ -255,8 +230,8 @@ function App() {
     }
   };
 
-  // Горячие клавиши (patch-006 §9, patch-010 §4)
-  useHotkeys({
+  // FIX: Memoize hotkeys object to prevent recreation on every render
+  const hotkeysConfig = useMemo(() => ({
     // patch-010 §4: Горячие клавиши (Ctrl/Cmd+/)
     'Ctrl+/': () => {
       setIsHotkeysModalOpen(true);
@@ -377,7 +352,10 @@ function App() {
         }
       }
     },
-  });
+  }), [currentView, toggleFiltersPanel, cycleCellDensity, setFiltersPanelOpen]); // Dependencies
+
+  // Горячие клавиши (patch-006 §9, patch-010 §4)
+  useHotkeys(hotkeysConfig);
 
   return (
     <div className="app">
@@ -553,12 +531,62 @@ function App() {
         }}
       />
 
-      {/* patch-022: Модальное окно активации лицензии */}
-      {showLicenseModal && !isLicenseValid && (
-        <LicenseKeyModal onValidate={handleLicenseValidated} />
-      )}
     </div>
   );
+}
+
+function App() {
+  const [isLicenseValid, setIsLicenseValid] = useState(false);
+  const [showLicenseModal, setShowLicenseModal] = useState(false);
+  const resolvedTheme = useSettingsStore((state) => state.resolvedTheme);
+
+  useEffect(() => {
+    const licenseActivated = localStorage.getItem('licenseActivated');
+    if (licenseActivated === 'true') {
+      setIsLicenseValid(true);
+    } else {
+      setShowLicenseModal(true);
+    }
+  }, []);
+
+  const handleLicenseValidated = (isValid) => {
+    if (isValid) {
+      setIsLicenseValid(true);
+      setShowLicenseModal(false);
+    }
+  };
+
+  if (!isLicenseValid) {
+    return (
+      <div className="app">
+        {showLicenseModal && (
+          <LicenseKeyModal onValidate={handleLicenseValidated} />
+        )}
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
+          toastStyle={{
+            background: 'var(--modal-bg)',
+            color: 'var(--modal-fg)',
+            border: '1px solid var(--modal-border)',
+          }}
+          progressStyle={{
+            background: 'var(--color-accent-primary)',
+          }}
+        />
+      </div>
+    );
+  }
+
+  return <MainAppShell resolvedTheme={resolvedTheme} />;
 }
 
 export default App;

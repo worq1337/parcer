@@ -380,6 +380,16 @@ class Check {
       checkData.sourceBotTitle,
       pick(checkData.source_bot_title, currentCheck.source_bot_title || metadataObject?.bot_title || null)
     );
+
+    // CRITICAL FIX: Normalize source BEFORE using it in nextSourceApp
+    const updatedSourceExplicit = normalizeExplicitSource(
+      pick(checkData.source, currentCheck.source)
+    );
+    const resolvedSource = detectSource({
+      explicit: updatedSourceExplicit,
+      text: nextRawText || currentCheck.raw_text,
+    });
+
     const nextSourceApp = pick(
       checkData.sourceApp,
       pick(checkData.source_app, currentCheck.source_app || updatedSourceExplicit || null)
@@ -392,14 +402,6 @@ class Check {
       operator: nextOperator,
       transactionType: nextTransactionType,
     }) || currentCheck.fingerprint;
-
-    const updatedSourceExplicit = normalizeExplicitSource(
-      pick(checkData.source, currentCheck.source)
-    );
-    const resolvedSource = detectSource({
-      explicit: updatedSourceExplicit,
-      text: nextRawText || currentCheck.raw_text,
-    });
 
     const updatedData = {
       datetime: nextDateParts.datetimeForDb,

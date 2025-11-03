@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { OPERATORS_DICTIONARY } from '../data/operatorsDict';
+import { operatorsAPI } from '../services/api';
 
 /**
  * Zustand store для управления операторами
@@ -109,39 +110,39 @@ export const useOperatorsStore = create(
       saveOperator: async (operatorData) => {
         const { operators, editMode } = get();
 
-        if (editMode === 'add') {
-          // Добавляем нового оператора
-          const newOperator = {
-            ...operatorData,
-            id: Math.max(...operators.map((o) => o.id), 0) + 1,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
+        try {
+          if (editMode === 'add') {
+            // Добавляем нового оператора через API
+            const response = await operatorsAPI.create(operatorData);
+            const newOperator = response.operator || response;
 
-          set({
-            operators: [...operators, newOperator],
-            selectedOperator: null,
-            editMode: null,
-          });
+            set({
+              operators: [...operators, newOperator],
+              selectedOperator: null,
+              editMode: null,
+            });
 
-          // TODO: Отправить POST /api/operators
-          return { success: true };
-        } else if (editMode === 'edit') {
-          // Обновляем существующего оператора
-          const updatedOperators = operators.map((op) =>
-            op.id === operatorData.id
-              ? { ...operatorData, updatedAt: new Date().toISOString() }
-              : op
-          );
+            return { success: true, operator: newOperator };
+          } else if (editMode === 'edit') {
+            // Обновляем существующего оператора через API
+            const response = await operatorsAPI.update(operatorData.id, operatorData);
+            const updatedOperator = response.operator || response;
 
-          set({
-            operators: updatedOperators,
-            selectedOperator: null,
-            editMode: null,
-          });
+            const updatedOperators = operators.map((op) =>
+              op.id === operatorData.id ? updatedOperator : op
+            );
 
-          // TODO: Отправить PUT /api/operators/:id
-          return { success: true };
+            set({
+              operators: updatedOperators,
+              selectedOperator: null,
+              editMode: null,
+            });
+
+            return { success: true, operator: updatedOperator };
+          }
+        } catch (error) {
+          console.error('Error saving operator:', error);
+          return { success: false, error: error.message };
         }
       },
 
@@ -151,56 +152,90 @@ export const useOperatorsStore = create(
       deleteOperator: async (operatorId) => {
         const { operators } = get();
 
-        set({
-          operators: operators.filter((op) => op.id !== operatorId),
-          selectedOperator: null,
-          editMode: null,
-        });
+        try {
+          await operatorsAPI.delete(operatorId);
 
-        // TODO: Отправить DELETE /api/operators/:id
-        return { success: true };
+          set({
+            operators: operators.filter((op) => op.id !== operatorId),
+            selectedOperator: null,
+            editMode: null,
+          });
+
+          return { success: true };
+        } catch (error) {
+          console.error('Error deleting operator:', error);
+          return { success: false, error: error.message };
+        }
       },
 
       /**
        * Добавить синоним к существующему оператору
        */
-      addSynonym: (operatorId, synonym) => {
+      addSynonym: async (operatorId, synonym) => {
         const { operators } = get();
+        const operator = operators.find(op => op.id === operatorId);
 
-        const updatedOperators = operators.map((op) =>
-          op.id === operatorId
-            ? {
-                ...op,
-                synonyms: [...op.synonyms, synonym],
-                updatedAt: new Date().toISOString(),
-              }
-            : op
-        );
+        if (!operator) return { success: false, error: 'Operator not found' };
 
-        set({ operators: updatedOperators });
+        const updatedSynonyms = [...operator.synonyms, synonym];
 
-        // TODO: Отправить PATCH /api/operators/:id/synonyms
+        try {
+          await operatorsAPI.update(operatorId, {
+            ...operator,
+            synonyms: updatedSynonyms
+          });
+
+          const updatedOperators = operators.map((op) =>
+            op.id === operatorId
+              ? {
+                  ...op,
+                  synonyms: updatedSynonyms,
+                  updatedAt: new Date().toISOString(),
+                }
+              : op
+          );
+
+          set({ operators: updatedOperators });
+          return { success: true };
+        } catch (error) {
+          console.error('Error adding synonym:', error);
+          return { success: false, error: error.message };
+        }
       },
 
       /**
        * Удалить синоним
        */
-      removeSynonym: (operatorId, synonym) => {
+      removeSynonym: async (operatorId, synonym) => {
         const { operators } = get();
+        const operator = operators.find(op => op.id === operatorId);
 
-        const updatedOperators = operators.map((op) =>
-          op.id === operatorId
-            ? {
-                ...op,
-                synonyms: op.synonyms.filter((s) => s !== synonym),
-                updatedAt: new Date().toISOString(),
-              }
-            : op
-        );
+        if (!operator) return { success: false, error: 'Operator not found' };
 
-        set({ operators: updatedOperators });
+        const updatedSynonyms = operator.synonyms.filter((s) => s !== synonym);
 
-        // TODO: Отправить PATCH /api/operators/:id/synonyms
+        try {
+          await operatorsAPI.update(operatorId, {
+            ...operator,
+            synonyms: updatedSynonyms
+          });
+
+          const updatedOperators = operators.map((op) =>
+            op.id === operatorId
+              ? {
+                  ...op,
+                  synonyms: updatedSynonyms,
+                  updatedAt: new Date().toISOString(),
+                }
+              : op
+          );
+
+          set({ operators: updatedOperators });
+          return { success: true };
+        } catch (error) {
+          console.error('Error removing synonym:', error);
+          return { success: false, error: error.message };
+        }
       },
 
       /**

@@ -1,6 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios'); // patch-017: для вызова ingest API
 const { sanitizeForLogging } = require('../utils/security'); // patch-017 §8
+const Check = require('../models/Check'); // CRITICAL FIX: Missing import for /last command
 
 // patch-017: URL локального API
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001/api';

@@ -1,5 +1,16 @@
 const pool = require('../config/database');
 
+// In-memory cache for operators (performance optimization)
+let operatorsCache = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 60000; // 1 minute
+
+// Helper function to clear cache on mutations
+function clearOperatorsCache() {
+  operatorsCache = null;
+  cacheTimestamp = 0;
+}
+
 class Operator {
   /**
    * Получить все операторы
@@ -50,9 +61,17 @@ class Operator {
   /**
    * Поиск оператора по частичному совпадению (для парсинга из текста)
    * patch-008: также проверяет canonical_name и все synonyms
+   * PERFORMANCE: Uses in-memory cache with 1-minute TTL
    */
   static async findByPartialMatch(text) {
-    const operators = await this.getAll();
+    // Check cache validity
+    const now = Date.now();
+    if (!operatorsCache || now - cacheTimestamp > CACHE_TTL) {
+      operatorsCache = await this.getAll();
+      cacheTimestamp = now;
+    }
+
+    const operators = operatorsCache;
     const normalize = (value) => value.toLowerCase().replace(/\s+/g, ' ').trim();
     const normalizedText = normalize(text);
 
@@ -157,6 +176,7 @@ class Operator {
     ];
 
     const result = await pool.query(query, values);
+    clearOperatorsCache(); // Invalidate cache after mutation
     return result.rows[0];
   }
 
@@ -187,6 +207,7 @@ class Operator {
     ];
 
     const result = await pool.query(query, values);
+    clearOperatorsCache(); // Invalidate cache after mutation
     return result.rows[0];
   }
 
@@ -195,6 +216,7 @@ class Operator {
    */
   static async delete(id) {
     const result = await pool.query('DELETE FROM operators WHERE id = $1 RETURNING *', [id]);
+    clearOperatorsCache(); // Invalidate cache after mutation
     return result.rows[0];
   }
 
@@ -233,6 +255,7 @@ class Operator {
       RETURNING *
     `;
     const result = await pool.query(query, [id, synonym]);
+    clearOperatorsCache(); // Invalidate cache after mutation
     return result.rows[0];
   }
 
@@ -249,6 +272,7 @@ class Operator {
       RETURNING *
     `;
     const result = await pool.query(query, [id, synonym]);
+    clearOperatorsCache(); // Invalidate cache after mutation
     return result.rows[0];
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { toast } from 'react-toastify'; // patch-008 §8
 import { useChecksStore } from '../../state/checksStore';
 import { useFiltersStore } from '../../state/filtersStore';
@@ -33,13 +33,18 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
   const [showFileMenu, setShowFileMenu] = useState(false); // patch-006 §11
   const [showViewMenu, setShowViewMenu] = useState(false); // patch-006 §12
 
+  // FIX: Use useRef instead of window.searchDebounce for proper cleanup
+  const searchDebounceRef = useRef(null);
+
   // Обработчик быстрого поиска с debounce
   const handleSearchChange = (e) => {
     const value = e.target.value;
 
     // Debounce 200ms
-    clearTimeout(window.searchDebounce);
-    window.searchDebounce = setTimeout(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = setTimeout(() => {
       setQuickSearch(value);
     }, 200);
   };

@@ -67,11 +67,17 @@ export const useUserbotChat = () => {
     const requestToken = Symbol('botsRequest');
     botsRequestTokenRef.current = requestToken;
 
+    console.log('[useUserbotChat] loadBots called');
+
     try {
       setBotsLoading(true);
+      console.log('[useUserbotChat] Fetching bots from API...');
       const botsData = await userbotChatService.getBots();
+      console.log('[useUserbotChat] Received botsData:', botsData);
 
-      if (!isMounted.current || botsRequestTokenRef.current !== requestToken) {
+      // Only check if component is still mounted, allow concurrent requests to complete
+      if (!isMounted.current) {
+        console.log('[useUserbotChat] Component unmounted, aborting');
         return;
       }
 
@@ -90,6 +96,7 @@ export const useUserbotChat = () => {
             .filter(Boolean)
         : [];
 
+      console.log('[useUserbotChat] Normalized bots:', normalizedBots);
       setBots(normalizedBots);
 
     setSelectedBotId((currentId) => {
@@ -99,13 +106,13 @@ export const useUserbotChat = () => {
       return currentId;
     });
     } catch (error) {
-      if (!isMounted.current || botsRequestTokenRef.current !== requestToken) {
+      if (!isMounted.current) {
         return;
       }
       console.error('Ошибка загрузки списка ботов:', error);
       toast.error('Ошибка загрузки списка ботов');
     } finally {
-      if (isMounted.current && botsRequestTokenRef.current === requestToken) {
+      if (isMounted.current) {
         setBotsLoading(false);
       }
     }
@@ -399,8 +406,9 @@ export const useUserbotChat = () => {
     return () => clearInterval(interval);
   }, [selectedBotId]); // CRITICAL: loadMessages/loadBots НЕ в deps!
 
-  // Cleanup при размонтировании
+  // Cleanup при размонтировании и установка isMounted при монтировании
   useEffect(() => {
+    isMounted.current = true; // Reset to true on every mount (for StrictMode double-render)
     return () => {
       isMounted.current = false;
       botsRequestTokenRef.current = null;

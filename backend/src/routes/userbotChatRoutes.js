@@ -14,7 +14,7 @@ const USERBOT_SERVICE_URL = process.env.USERBOT_SERVICE_URL || 'http://userbot:5
 // Конфигурация мониторимых ботов
 const MONITORED_BOTS = [
   { id: 915326936, name: 'CardXabar', username: '@CardXabarBot', icon: '💳' },
-  { id: 856264490, name: '856264490', username: '(недоступен)', icon: '🏦' },
+  { id: 856254490, name: '856254490', username: '(недоступен)', icon: '🏦' },
   { id: 7028509569, name: 'NBU Card', username: '@NBUCard_bot', icon: '🏦' }
 ];
 

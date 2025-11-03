@@ -11,16 +11,9 @@ import { operatorsAPI } from '../services/api';
 export const useOperatorsStore = create(
   persist(
     (set, get) => ({
-      // Список операторов (загружаем из словаря по умолчанию)
-      operators: OPERATORS_DICTIONARY.map((op, idx) => ({
-        id: idx + 1, // временный id, в БД будет настоящий
-        canonicalName: op.canonicalName,
-        appName: op.appName,
-        synonyms: op.synonyms,
-        isP2P: op.isP2P,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })),
+      // Список операторов (будет загружен с сервера)
+      operators: [],
+      operatorsLoaded: false,
 
       // Текущий выбранный оператор для редактирования
       selectedOperator: null,
@@ -33,6 +26,45 @@ export const useOperatorsStore = create(
       filterByApp: null, // null или название приложения
       filterByP2P: null, // null | true | false
       showUnknownOnly: false, // показать только неизвестных
+
+      /**
+       * Загрузить операторов с сервера
+       */
+      loadOperators: async () => {
+        try {
+          const response = await operatorsAPI.getAll();
+          // Backend возвращает массив операторов напрямую или { success, operators }
+          const operators = Array.isArray(response) ? response : (response.operators || response.data || []);
+
+          // Преобразуем snake_case в camelCase
+          const normalizedOperators = operators.map(op => ({
+            id: op.id,
+            canonicalName: op.canonical_name || op.canonicalName,
+            appName: op.app_name || op.appName,
+            synonyms: op.synonyms || [],
+            isP2P: op.is_p2p !== undefined ? op.is_p2p : op.isP2P,
+            createdAt: op.created_at || op.createdAt,
+            updatedAt: op.updated_at || op.updatedAt,
+          }));
+
+          set({ operators: normalizedOperators, operatorsLoaded: true });
+          return { success: true };
+        } catch (error) {
+          console.error('Error loading operators:', error);
+          // Фоллбек на локальный словарь
+          const fallbackOperators = OPERATORS_DICTIONARY.map((op, idx) => ({
+            id: -(idx + 1), // отрицательный id для временных
+            canonicalName: op.canonicalName,
+            appName: op.appName,
+            synonyms: op.synonyms,
+            isP2P: op.isP2P,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }));
+          set({ operators: fallbackOperators, operatorsLoaded: true });
+          return { success: false, error: error.message };
+        }
+      },
 
       /**
        * Получить список операторов с учётом фильтров
@@ -114,7 +146,19 @@ export const useOperatorsStore = create(
           if (editMode === 'add') {
             // Добавляем нового оператора через API
             const response = await operatorsAPI.create(operatorData);
-            const newOperator = response.operator || response;
+            // Backend возвращает { success, message, data: operator }
+            const rawOperator = response.data || response.operator || response;
+
+            // Нормализуем snake_case -> camelCase
+            const newOperator = {
+              id: rawOperator.id,
+              canonicalName: rawOperator.canonical_name || rawOperator.canonicalName,
+              appName: rawOperator.app_name || rawOperator.appName,
+              synonyms: rawOperator.synonyms || [],
+              isP2P: rawOperator.is_p2p !== undefined ? rawOperator.is_p2p : rawOperator.isP2P,
+              createdAt: rawOperator.created_at || rawOperator.createdAt,
+              updatedAt: rawOperator.updated_at || rawOperator.updatedAt,
+            };
 
             set({
               operators: [...operators, newOperator],
@@ -126,7 +170,18 @@ export const useOperatorsStore = create(
           } else if (editMode === 'edit') {
             // Обновляем существующего оператора через API
             const response = await operatorsAPI.update(operatorData.id, operatorData);
-            const updatedOperator = response.operator || response;
+            const rawOperator = response.data || response.operator || response;
+
+            // Нормализуем snake_case -> camelCase
+            const updatedOperator = {
+              id: rawOperator.id,
+              canonicalName: rawOperator.canonical_name || rawOperator.canonicalName,
+              appName: rawOperator.app_name || rawOperator.appName,
+              synonyms: rawOperator.synonyms || [],
+              isP2P: rawOperator.is_p2p !== undefined ? rawOperator.is_p2p : rawOperator.isP2P,
+              createdAt: rawOperator.created_at || rawOperator.createdAt,
+              updatedAt: rawOperator.updated_at || rawOperator.updatedAt,
+            };
 
             const updatedOperators = operators.map((op) =>
               op.id === operatorData.id ? updatedOperator : op

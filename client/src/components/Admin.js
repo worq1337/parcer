@@ -300,8 +300,7 @@ const Admin = ({ onClose }) => {
   const loadBackups = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/admin/backup');
-      const data = await response.json();
+      const data = await adminAPI.getBackups();
 
       if (data.success) {
         setBackups(data.backups.map(b => ({
@@ -313,7 +312,7 @@ const Admin = ({ onClose }) => {
       }
     } catch (error) {
       console.error('Error loading backups:', error);
-      showToastThrottled(() => toast.error('Ошибка загрузки резервных копий'));
+      showToastThrottled('backups-load-error', 'Ошибка загрузки резервных копий', 'error');
       setBackups([]);
     } finally {
       setLoading(false);
@@ -323,28 +322,20 @@ const Admin = ({ onClose }) => {
   // Создание резервной копии
   const handleCreateBackup = async () => {
     try {
-      showToastThrottled(() => toast.info('Создание резервной копии...'));
+      showToastThrottled('backup-create-info', 'Создание резервной копии...', 'info');
       setLoading(true);
 
-      const response = await fetch('http://localhost:3001/api/admin/backup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({})
-      });
-
-      const data = await response.json();
+      const data = await adminAPI.createBackup();
 
       if (data.success) {
-        showToastThrottled(() => toast.success('Резервная копия создана'));
+        showToastThrottled('backup-create-success', 'Резервная копия создана', 'success');
         loadBackups(); // Перезагружаем список
       } else {
         throw new Error(data.error || 'Failed to create backup');
       }
     } catch (error) {
       console.error('Backup error:', error);
-      showToastThrottled(() => toast.error(`Ошибка резервного копирования: ${error.message}`));
+      showToastThrottled('backup-create-error', `Ошибка резервного копирования: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }

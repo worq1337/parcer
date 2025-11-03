@@ -22,6 +22,8 @@ const Operators = ({ onClose }) => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
   const {
+    loadOperators,
+    operatorsLoaded,
     getFilteredOperators,
     getUniqueApps,
     selectedOperator,
@@ -45,6 +47,13 @@ const Operators = ({ onClose }) => {
     exportDictionary,
     importDictionary,
   } = useOperatorsStore();
+
+  // Загрузить операторов с сервера при монтировании компонента
+  useEffect(() => {
+    if (!operatorsLoaded) {
+      loadOperators();
+    }
+  }, [operatorsLoaded, loadOperators]);
 
   const filteredOperators = useMemo(() => getFilteredOperators(), [
     getFilteredOperators,

@@ -162,6 +162,11 @@ export const adminAPI = {
     return response.data;
   },
 
+  getBackups: async () => {
+    const response = await api.get('/admin/backup');
+    return response.data;
+  },
+
   createBackup: async () => {
     const response = await api.post('/admin/backup', {});
     return response.data;

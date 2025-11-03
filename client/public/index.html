@@ -18,9 +18,226 @@
         }
       }
     </script>
+    <style>
+      /* Loading Screen Styles */
+      #app-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+      }
+
+      #app-loader.loaded {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .loader-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2rem;
+      }
+
+      /* Logo Animation */
+      .loader-logo {
+        position: relative;
+        width: 80px;
+        height: 80px;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      .logo-icon {
+        width: 100%;
+        height: 100%;
+        background: white;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+        font-weight: 700;
+        color: #667eea;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      }
+
+      /* Spinner Animation */
+      .loader-spinner {
+        position: relative;
+        width: 60px;
+        height: 60px;
+      }
+
+      .spinner-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border: 3px solid transparent;
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      .spinner-ring:nth-child(2) {
+        border-top-color: rgba(255, 255, 255, 0.6);
+        animation-duration: 1.5s;
+        animation-direction: reverse;
+      }
+
+      /* Text Styles */
+      .loader-text {
+        color: white;
+        text-align: center;
+      }
+
+      .loader-title {
+        font-size: 24px;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        letter-spacing: -0.5px;
+      }
+
+      .loader-subtitle {
+        font-size: 14px;
+        opacity: 0.9;
+        font-weight: 400;
+      }
+
+      /* Progress Bar */
+      .loader-progress {
+        width: 200px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 1rem;
+      }
+
+      .loader-progress-bar {
+        height: 100%;
+        background: white;
+        border-radius: 2px;
+        animation: progress 2s ease-in-out infinite;
+      }
+
+      /* Animations */
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+
+      @keyframes progress {
+        0% {
+          width: 0%;
+          margin-left: 0%;
+        }
+        50% {
+          width: 70%;
+          margin-left: 15%;
+        }
+        100% {
+          width: 0%;
+          margin-left: 100%;
+        }
+      }
+
+      /* Dark mode support */
+      @media (prefers-color-scheme: dark) {
+        #app-loader {
+          background: linear-gradient(135deg, #1e3a8a 0%, #4c1d95 100%);
+        }
+      }
+
+      /* Mobile optimization */
+      @media (max-width: 768px) {
+        .loader-logo {
+          width: 64px;
+          height: 64px;
+        }
+
+        .logo-icon {
+          font-size: 28px;
+          border-radius: 12px;
+        }
+
+        .loader-title {
+          font-size: 20px;
+        }
+
+        .loader-subtitle {
+          font-size: 13px;
+        }
+
+        .loader-spinner {
+          width: 48px;
+          height: 48px;
+        }
+
+        .loader-progress {
+          width: 160px;
+        }
+      }
+    </style>
   </head>
   <body>
     <noscript>Необходимо включить JavaScript для работы приложения.</noscript>
+
+    <!-- Loading Screen -->
+    <div id="app-loader">
+      <div class="loader-content">
+        <div class="loader-logo">
+          <div class="logo-icon">₽</div>
+        </div>
+
+        <div class="loader-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+        </div>
+
+        <div class="loader-text">
+          <div class="loader-title">Receipt Parser</div>
+          <div class="loader-subtitle">Загрузка приложения...</div>
+        </div>
+
+        <div class="loader-progress">
+          <div class="loader-progress-bar"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="root"></div>
+
+    <!-- Hide loader after React mounts -->
+    <script>
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          var loader = document.getElementById('app-loader');
+          if (loader) {
+            loader.classList.add('loaded');
+            // Remove from DOM after animation
+            setTimeout(function() {
+              loader.remove();
+            }, 500);
+          }
+        }, 500); // Small delay to ensure React is mounted
+      });
+    </script>
   </body>
 </html>

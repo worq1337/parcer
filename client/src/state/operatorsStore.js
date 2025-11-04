@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { OPERATORS_DICTIONARY } from '../data/operatorsDict';
 import { operatorsAPI } from '../services/api';
+import { fuzzyIncludes } from '../utils/searchNormalization';
 
 /**
  * Zustand store для управления операторами
@@ -26,6 +27,10 @@ export const useOperatorsStore = create(
       filterByApp: null, // null или название приложения
       filterByP2P: null, // null | true | false
       showUnknownOnly: false, // показать только неизвестных
+
+      // Группировка по приложениям
+      groupByApp: true, // включить группировку
+      expandedApps: {}, // { [appName]: boolean } - развёрнутые группы
 
       /**
        * Загрузить операторов с сервера
@@ -73,12 +78,11 @@ export const useOperatorsStore = create(
         const { operators, searchQuery, filterByApp, filterByP2P, showUnknownOnly } = get();
 
         return operators.filter((op) => {
-          // Поиск по имени или синонимам
+          // Поиск по имени или синонимам с fuzzy matching
           if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            const nameMatch = op.canonicalName.toLowerCase().includes(query);
+            const nameMatch = fuzzyIncludes(op.canonicalName, searchQuery);
             const synonymMatch = op.synonyms.some((syn) =>
-              syn.toLowerCase().includes(query)
+              fuzzyIncludes(syn, searchQuery)
             );
             if (!nameMatch && !synonymMatch) return false;
           }
@@ -104,6 +108,43 @@ export const useOperatorsStore = create(
         const { operators } = get();
         const apps = new Set(operators.map((op) => op.appName));
         return Array.from(apps).sort();
+      },
+
+      /**
+       * Получить операторов, сгруппированных по приложениям
+       * Возвращает: { [appName]: Operator[] }
+       */
+      getGroupedOperators: () => {
+        const { operators, searchQuery, filterByApp, filterByP2P, showUnknownOnly } = get();
+
+        // Сначала применяем фильтры с fuzzy matching
+        const filteredOps = operators.filter((op) => {
+          if (searchQuery) {
+            const nameMatch = fuzzyIncludes(op.canonicalName, searchQuery);
+            const synonymMatch = op.synonyms.some((syn) =>
+              fuzzyIncludes(syn, searchQuery)
+            );
+            if (!nameMatch && !synonymMatch) return false;
+          }
+
+          if (filterByApp && op.appName !== filterByApp) return false;
+          if (filterByP2P !== null && op.isP2P !== filterByP2P) return false;
+          if (showUnknownOnly) return false;
+
+          return true;
+        });
+
+        // Группируем по appName
+        const grouped = {};
+        filteredOps.forEach((op) => {
+          const appName = op.appName || 'Без приложения';
+          if (!grouped[appName]) {
+            grouped[appName] = [];
+          }
+          grouped[appName].push(op);
+        });
+
+        return grouped;
       },
 
       /**
@@ -308,6 +349,30 @@ export const useOperatorsStore = create(
       setFilterByApp: (app) => set({ filterByApp: app }),
       setFilterByP2P: (isP2P) => set({ filterByP2P: isP2P }),
       setShowUnknownOnly: (show) => set({ showUnknownOnly: show }),
+
+      /**
+       * Управление группировкой
+       */
+      setGroupByApp: (enabled) => set({ groupByApp: enabled }),
+      toggleAppGroup: (appName) => {
+        const { expandedApps } = get();
+        set({
+          expandedApps: {
+            ...expandedApps,
+            [appName]: !expandedApps[appName],
+          },
+        });
+      },
+      expandAllApps: () => {
+        const { operators } = get();
+        const apps = new Set(operators.map(op => op.appName));
+        const expandedApps = {};
+        apps.forEach(app => { expandedApps[app] = true; });
+        set({ expandedApps });
+      },
+      collapseAllApps: () => {
+        set({ expandedApps: {} });
+      },
 
       /**
        * Очистить все фильтры

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { useOperatorsStore } from '../state/operatorsStore';
 import Icon from './icons/Icon';
+import HighlightedText from './common/HighlightedText';
 import '../styles/Operators.css';
 
 /**
@@ -25,6 +26,7 @@ const Operators = ({ onClose }) => {
     loadOperators,
     operatorsLoaded,
     getFilteredOperators,
+    getGroupedOperators,
     getUniqueApps,
     selectedOperator,
     editMode,
@@ -32,10 +34,16 @@ const Operators = ({ onClose }) => {
     filterByApp,
     filterByP2P,
     showUnknownOnly,
+    groupByApp,
+    expandedApps,
     setSearchQuery,
     setFilterByApp,
     setFilterByP2P,
     setShowUnknownOnly,
+    setGroupByApp,
+    toggleAppGroup,
+    expandAllApps,
+    collapseAllApps,
     clearFilters,
     selectOperator,
     startAddOperator,
@@ -57,6 +65,14 @@ const Operators = ({ onClose }) => {
 
   const filteredOperators = useMemo(() => getFilteredOperators(), [
     getFilteredOperators,
+    searchQuery,
+    filterByApp,
+    filterByP2P,
+    showUnknownOnly,
+  ]);
+
+  const groupedOperators = useMemo(() => getGroupedOperators(), [
+    getGroupedOperators,
     searchQuery,
     filterByApp,
     filterByP2P,
@@ -298,6 +314,40 @@ const Operators = ({ onClose }) => {
 
           {/* Фильтры */}
           <div className="operators-filters">
+            {/* Переключатель режима группировки */}
+            <button
+              className={`btn-toggle ${groupByApp ? 'active' : ''}`}
+              onClick={() => setGroupByApp(!groupByApp)}
+              title={groupByApp ? 'Отключить группировку' : 'Включить группировку по приложениям'}
+            >
+              <Icon name={groupByApp ? 'view_list' : 'view_module'} size={18} />
+              <span>{groupByApp ? 'Группировка' : 'Таблица'}</span>
+            </button>
+
+            {/* Кнопки развернуть/свернуть все (только в режиме группировки) */}
+            {groupByApp && (
+              <>
+                <button
+                  className="btn-text"
+                  onClick={expandAllApps}
+                  title="Развернуть все группы"
+                >
+                  <Icon name="unfold_more" size={18} />
+                  <span>Развернуть все</span>
+                </button>
+                <button
+                  className="btn-text"
+                  onClick={collapseAllApps}
+                  title="Свернуть все группы"
+                >
+                  <Icon name="unfold_less" size={18} />
+                  <span>Свернуть все</span>
+                </button>
+              </>
+            )}
+
+            <div className="filters-divider" />
+
             <select
               className="filter-select"
               value={filterByApp || ''}
@@ -341,85 +391,187 @@ const Operators = ({ onClose }) => {
             )}
           </div>
 
-          {/* Таблица операторов */}
+          {/* Таблица операторов или Accordion с группировкой */}
           <div className="operators-table-container">
-            <table className="operators-table">
-              <thead>
-                <tr>
-                  <th>Основное имя</th>
-                  <th>Приложение</th>
-                  <th className="text-center">P2P</th>
-                  <th>Синонимы</th>
-                  <th className="text-center">Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOperators.length === 0 ? (
+            {!groupByApp ? (
+              // Обычный режим - таблица
+              <table className="operators-table">
+                <thead>
                   <tr>
-                    <td colSpan="5" className="text-center text-muted">
-                      Операторы не найдены
-                    </td>
+                    <th>Основное имя</th>
+                    <th>Приложение</th>
+                    <th className="text-center">P2P</th>
+                    <th>Синонимы</th>
+                    <th className="text-center">Действия</th>
                   </tr>
-                ) : (
-                  filteredOperators.map((operator) => (
-                    <tr
-                      key={operator.id}
-                      className={
-                        selectedOperator?.id === operator.id ? 'selected' : ''
-                      }
-                      onClick={() => selectOperator(operator)}
-                    >
-                      <td className="font-medium">{operator.canonicalName}</td>
-                      <td>{operator.appName}</td>
-                      <td className="text-center">
-                        {operator.isP2P ? (
-                          <span className="badge badge-p2p">P2P</span>
-                        ) : (
-                          <span className="badge badge-regular">—</span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="synonyms-chips">
-                          {operator.synonyms.slice(0, 3).map((syn) => (
-                            <span key={syn} className="chip">
-                              {syn}
-                            </span>
-                          ))}
-                          {operator.synonyms.length > 3 && (
-                            <span className="chip chip-more">
-                              +{operator.synonyms.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="text-center">
-                        <button
-                          className="btn-icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectOperator(operator);
-                          }}
-                          title="Редактировать"
-                        >
-                          <Icon name="edit" size={18} />
-                        </button>
-                        <button
-                          className="btn-icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectOperator(operator);
-                            handleDelete();
-                          }}
-                          title="Удалить"
-                        >
-                          <Icon name="delete" size={18} />
-                        </button>
+                </thead>
+                <tbody>
+                  {filteredOperators.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="text-center text-muted">
+                        Операторы не найдены
                       </td>
                     </tr>
-                  ))
+                  ) : (
+                    filteredOperators.map((operator) => (
+                      <tr
+                        key={operator.id}
+                        className={
+                          selectedOperator?.id === operator.id ? 'selected' : ''
+                        }
+                        onClick={() => selectOperator(operator)}
+                      >
+                        <td className="font-medium">
+                          <HighlightedText text={operator.canonicalName} searchQuery={searchQuery} />
+                        </td>
+                        <td>{operator.appName}</td>
+                        <td className="text-center">
+                          {operator.isP2P ? (
+                            <span className="badge badge-p2p">P2P</span>
+                          ) : (
+                            <span className="badge badge-regular">—</span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="synonyms-chips">
+                            {operator.synonyms.slice(0, 3).map((syn) => (
+                              <span key={syn} className="chip">
+                                {syn}
+                              </span>
+                            ))}
+                            {operator.synonyms.length > 3 && (
+                              <span className="chip chip-more">
+                                +{operator.synonyms.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-center">
+                          <button
+                            className="btn-icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectOperator(operator);
+                            }}
+                            title="Редактировать"
+                          >
+                            <Icon name="edit" size={18} />
+                          </button>
+                          <button
+                            className="btn-icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectOperator(operator);
+                              handleDelete();
+                            }}
+                            title="Удалить"
+                          >
+                            <Icon name="delete" size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              // Режим группировки - Accordion
+              <div className="operators-accordion">
+                {Object.keys(groupedOperators).length === 0 ? (
+                  <div className="text-center text-muted" style={{ padding: '24px' }}>
+                    Операторы не найдены
+                  </div>
+                ) : (
+                  Object.keys(groupedOperators)
+                    .sort()
+                    .map((appName) => {
+                      const operators = groupedOperators[appName];
+                      const isExpanded = expandedApps[appName];
+
+                      return (
+                        <div key={appName} className="accordion-group">
+                          {/* Заголовок группы */}
+                          <div
+                            className="accordion-header"
+                            onClick={() => toggleAppGroup(appName)}
+                          >
+                            <Icon
+                              name={isExpanded ? 'expand_more' : 'chevron_right'}
+                              size={20}
+                              className="accordion-icon"
+                            />
+                            <span className="accordion-title">{appName}</span>
+                            <span className="accordion-count">({operators.length})</span>
+                          </div>
+
+                          {/* Содержимое группы */}
+                          {isExpanded && (
+                            <div className="accordion-content">
+                              {operators.map((operator) => (
+                                <div
+                                  key={operator.id}
+                                  className={`operator-card ${
+                                    selectedOperator?.id === operator.id ? 'selected' : ''
+                                  }`}
+                                  onClick={() => selectOperator(operator)}
+                                >
+                                  <div className="operator-card-header">
+                                    <span className="operator-name">
+                                      <HighlightedText text={operator.canonicalName} searchQuery={searchQuery} />
+                                    </span>
+                                    {operator.isP2P && (
+                                      <span className="badge badge-p2p">P2P</span>
+                                    )}
+                                  </div>
+
+                                  <div className="operator-card-body">
+                                    <div className="synonyms-chips">
+                                      {operator.synonyms.slice(0, 5).map((syn) => (
+                                        <span key={syn} className="chip">
+                                          {syn}
+                                        </span>
+                                      ))}
+                                      {operator.synonyms.length > 5 && (
+                                        <span className="chip chip-more">
+                                          +{operator.synonyms.length - 5}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="operator-card-actions">
+                                    <button
+                                      className="btn-icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        selectOperator(operator);
+                                      }}
+                                      title="Редактировать"
+                                    >
+                                      <Icon name="edit" size={16} />
+                                    </button>
+                                    <button
+                                      className="btn-icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        selectOperator(operator);
+                                        handleDelete();
+                                      }}
+                                      title="Удалить"
+                                    >
+                                      <Icon name="delete" size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                 )}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
 
           <div className="operators-footer">

@@ -175,11 +175,65 @@ export function normalizeTransactionType(type) {
   return typeMap[normalized] || type;
 }
 
+/**
+ * Возвращает массив частей строки с выделением совпадений
+ * Используется для подсветки результатов поиска
+ * @returns {Array<{text: string, highlight: boolean}>}
+ */
+export function getHighlightedParts(text, searchQuery) {
+  if (!text || !searchQuery) {
+    return [{ text: text || '', highlight: false }];
+  }
+
+  const normalizedText = normalizeSearchString(text);
+  const normalizedQuery = normalizeSearchString(searchQuery);
+
+  // Ищем позицию совпадения
+  let matchIndex = normalizedText.indexOf(normalizedQuery);
+
+  // Если прямого совпадения нет, пробуем транслитерацию
+  if (matchIndex === -1) {
+    const queryCyr = transliterateLatToCyr(normalizedQuery);
+    matchIndex = normalizedText.indexOf(queryCyr);
+
+    if (matchIndex === -1) {
+      const textLat = transliterateCyrToLat(normalizedText);
+      matchIndex = textLat.indexOf(normalizedQuery);
+
+      if (matchIndex === -1) {
+        const queryLat = transliterateCyrToLat(normalizedQuery);
+        matchIndex = textLat.indexOf(queryLat);
+      }
+    }
+  }
+
+  // Если совпадение не найдено, возвращаем весь текст без подсветки
+  if (matchIndex === -1) {
+    return [{ text, highlight: false }];
+  }
+
+  // Находим реальную позицию в исходном тексте (с учётом регистра и пробелов)
+  // Упрощённая версия - используем нормализованный индекс
+  const matchLength = normalizedQuery.length;
+
+  const parts = [];
+  if (matchIndex > 0) {
+    parts.push({ text: text.substring(0, matchIndex), highlight: false });
+  }
+  parts.push({ text: text.substring(matchIndex, matchIndex + matchLength), highlight: true });
+  if (matchIndex + matchLength < text.length) {
+    parts.push({ text: text.substring(matchIndex + matchLength), highlight: false });
+  }
+
+  return parts;
+}
+
 export default {
   normalizeSearchString,
   transliterateCyrToLat,
   transliterateLatToCyr,
   fuzzyIncludes,
+  getHighlightedParts,
   normalizeCardLast4,
   normalizeTransactionType,
 };

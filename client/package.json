@@ -1,6 +1,6 @@
 {
   "name": "receipt-parser-client",
-  "version": "1.0.15",
+  "version": "2.0.0",
   "description": "Desktop приложение для парсера банковских чеков",
   "homepage": ".",
   "author": "",
@@ -14,8 +14,8 @@
     "build": "react-scripts build",
     "electron": "electron .",
     "electron-dev": "concurrently -k \"cross-env BROWSER=none npm start\" \"wait-on http://localhost:3000 && electron .\"",
-    "package": "npm run build && electron-builder --mac --win",
-    "dist": "npm run build && electron-builder"
+    "package": "npm run build && electron-builder --win",
+    "dist": "npm run build && electron-builder --win"
   },
   "keywords": [
     "receipt",
@@ -84,42 +84,6 @@
       "owner": "worq1337",
       "repo": "parcer"
     },
-    "mac": {
-      "category": "public.app-category.finance",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "icon": "assets/icon.icns",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false
-    },
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
     "win": {
       "target": [
         {
@@ -151,14 +115,6 @@
       "uninstallDisplayName": "Receipt Parser",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Office",
-      "icon": "assets/icon.png"
     }
   }
 }

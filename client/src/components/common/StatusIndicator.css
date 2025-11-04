@@ -1,0 +1,57 @@
+/**
+ * Status Indicator Styles
+ * Индикаторы статуса оператора
+ */
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+  transition: transform 0.2s ease;
+}
+
+.status-indicator:hover {
+  transform: scale(1.15);
+}
+
+/* Цвета по умолчанию (если CSS variables не загружены) */
+.status-indicator.status-mapped {
+  color: #4caf50;
+}
+
+.status-indicator.status-warning {
+  color: #ff9800;
+}
+
+.status-indicator.status-incomplete {
+  color: #f44336;
+}
+
+/* Анимация для привлечения внимания к warning/incomplete */
+.status-indicator.status-warning,
+.status-indicator.status-incomplete {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Dark theme support */
+[data-theme="dark"] .status-indicator.status-mapped {
+  color: #66bb6a;
+}
+
+[data-theme="dark"] .status-indicator.status-warning {
+  color: #ffa726;
+}
+
+[data-theme="dark"] .status-indicator.status-incomplete {
+  color: #ef5350;
+}

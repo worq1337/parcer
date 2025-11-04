@@ -123,6 +123,32 @@ export const useOperatorsStore = create(
       },
 
       /**
+       * Получить статус оператора для индикатора
+       * Возвращает: 'mapped' | 'warning' | 'incomplete'
+       * - 'mapped': оператор полностью сопоставлен (есть appName и синонимы)
+       * - 'warning': есть appName, но нет синонимов (или наоборот)
+       * - 'incomplete': нет appName (не сопоставлен)
+       */
+      getOperatorStatus: (operator) => {
+        const hasApp = operator.appName && operator.appName.trim() !== '';
+        const hasSynonyms = operator.synonyms && operator.synonyms.length > 0;
+
+        if (hasApp && hasSynonyms) {
+          return 'mapped'; // ✓ зелёная галочка
+        }
+
+        if (!hasApp) {
+          return 'incomplete'; // ⚠ не сопоставлен
+        }
+
+        if (hasApp && !hasSynonyms) {
+          return 'warning'; // ⚠ нет синонимов
+        }
+
+        return 'warning';
+      },
+
+      /**
        * Получить операторов, сгруппированных по приложениям
        * Возвращает: { [appName]: Operator[] }
        */

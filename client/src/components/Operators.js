@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { useOperatorsStore } from '../state/operatorsStore';
 import Icon from './icons/Icon';
 import HighlightedText from './common/HighlightedText';
+import StatusIndicator from './common/StatusIndicator';
 import '../styles/Operators.css';
 
 /**
@@ -29,6 +30,7 @@ const Operators = ({ onClose }) => {
     getGroupedOperators,
     getUniqueApps,
     getP2PStats,
+    getOperatorStatus,
     selectedOperator,
     editMode,
     searchQuery,
@@ -416,6 +418,9 @@ const Operators = ({ onClose }) => {
               <table className="operators-table">
                 <thead>
                   <tr>
+                    <th className="text-center" style={{ width: '40px' }}>
+                      <Icon name="info" size={16} title="Статус сопоставления" />
+                    </th>
                     <th>Основное имя</th>
                     <th>Приложение</th>
                     <th className="text-center">P2P</th>
@@ -426,7 +431,7 @@ const Operators = ({ onClose }) => {
                 <tbody>
                   {filteredOperators.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="text-center text-muted">
+                      <td colSpan="6" className="text-center text-muted">
                         Операторы не найдены
                       </td>
                     </tr>
@@ -439,6 +444,9 @@ const Operators = ({ onClose }) => {
                         }
                         onClick={() => selectOperator(operator)}
                       >
+                        <td className="text-center">
+                          <StatusIndicator status={getOperatorStatus(operator)} />
+                        </td>
                         <td className="font-medium">
                           <HighlightedText text={operator.canonicalName} searchQuery={searchQuery} />
                         </td>
@@ -534,6 +542,7 @@ const Operators = ({ onClose }) => {
                                   onClick={() => selectOperator(operator)}
                                 >
                                   <div className="operator-card-header">
+                                    <StatusIndicator status={getOperatorStatus(operator)} />
                                     <span className="operator-name">
                                       <HighlightedText text={operator.canonicalName} searchQuery={searchQuery} />
                                     </span>

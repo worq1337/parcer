@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles/tokens.css'; // patch-016 §3, §10: Токены дизайна для светлой/тёмной темы
+import './styles/button-tokens.css'; // patch-016: Дополнительные токены для Button компонента
 import './styles/index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';

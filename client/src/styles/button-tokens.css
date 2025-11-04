@@ -1,0 +1,64 @@
+/**
+ * Button Design Tokens - patch-016
+ * Дополнительные токены для унифицированного компонента Button
+ * Используют существующие переменные из tokens.css как основу
+ */
+
+:root {
+  /* Button Colors - aliasing from existing tokens */
+  --color-primary: var(--color-accent-primary);
+  --color-primary-dark: var(--color-accent-hover);
+  --color-success: var(--status-success);
+  --color-success-dark: #388e3c;
+  --color-warning: var(--status-warning);
+  --color-warning-dark: #f57c00;
+  --color-error: var(--status-error);
+  --color-error-dark: #d32f2f;
+  --color-info: var(--status-info);
+  --color-info-dark: #1565c0;
+
+  /* Button Heights */
+  --btn-height-sm: 28px;
+  --btn-height-base: 32px;
+  --btn-height-lg: 40px;
+
+  /* Button Padding */
+  --btn-padding-x-sm: 8px;
+  --btn-padding-x-base: 12px;
+  --btn-padding-x-lg: 16px;
+
+  /* Button Font Sizes */
+  --btn-font-size-sm: 12px;
+  --btn-font-size-base: 14px;
+  --btn-font-size-lg: 15px;
+
+  /* Typography fallbacks */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-weight-medium: 500;
+  --line-height-tight: 1.2;
+
+  /* Spacing fallbacks */
+  --spacing-sm: 8px;
+
+  /* Border radius fallbacks */
+  --radius-md: 6px;
+
+  /* Transition fallbacks */
+  --transition-fast: 150ms ease;
+
+  /* Shadow fallbacks */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+
+  /* Background/Text fallbacks (from existing tokens.css) */
+  --bg-primary: var(--color-bg-primary);
+  --bg-hover: var(--color-bg-hover);
+  --bg-tertiary: var(--color-bg-tertiary);
+  --text-primary: var(--color-text-primary);
+  --text-inverse: var(--color-text-inverse);
+  --border-primary: var(--color-border-primary);
+}
+
+/* Dark theme overrides if needed */
+[data-theme="dark"] {
+  /* Можно добавить специфичные для кнопок переменные в тёмной теме */
+}

@@ -4,6 +4,7 @@ import { useOperatorsStore } from '../state/operatorsStore';
 import Icon from './icons/Icon';
 import HighlightedText from './common/HighlightedText';
 import StatusIndicator from './common/StatusIndicator';
+import ImportPreviewModal from './modals/ImportPreviewModal';
 import '../styles/Operators.css';
 
 /**
@@ -24,6 +25,7 @@ const Operators = ({ onClose }) => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
   const {
+    operators,
     loadOperators,
     operatorsLoaded,
     getFilteredOperators,
@@ -98,6 +100,9 @@ const Operators = ({ onClose }) => {
   const [bulkSynonyms, setBulkSynonyms] = useState('');
   const [testText, setTestText] = useState('');
   const [matchedOperator, setMatchedOperator] = useState(null);
+
+  // State для модального окна импорта
+  const [importPreviewFile, setImportPreviewFile] = useState(null);
 
   // Когда выбирается оператор, обновляем форму
   React.useEffect(() => {
@@ -252,19 +257,32 @@ const Operators = ({ onClose }) => {
     input.type = 'file';
     input.accept = '.json';
 
-    input.onchange = async (e) => {
+    input.onchange = (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
-      try {
-        const result = await importDictionary(file);
-        toast.success(`Импортировано операторов: ${result.count}`);
-      } catch (error) {
-        toast.error(`Ошибка импорта: ${error.message}`);
-      }
+      // Показываем модальное окно предпросмотра
+      setImportPreviewFile(file);
     };
 
     input.click();
+  };
+
+  const handleImportConfirm = async (importedOperators) => {
+    try {
+      // Применяем импортированных операторов
+      await importDictionary(importedOperators);
+      setImportPreviewFile(null);
+      toast.success(`Импортировано операторов: ${importedOperators.length}`);
+      // Перезагружаем операторов с сервера
+      await loadOperators();
+    } catch (error) {
+      toast.error(`Ошибка импорта: ${error.message}`);
+    }
+  };
+
+  const handleImportCancel = () => {
+    setImportPreviewFile(null);
   };
 
   return (
@@ -783,6 +801,16 @@ const Operators = ({ onClose }) => {
           </div>
         )}
       </div>
+
+      {/* Модальное окно предпросмотра импорта */}
+      {importPreviewFile && (
+        <ImportPreviewModal
+          file={importPreviewFile}
+          currentOperators={operators}
+          onConfirm={handleImportConfirm}
+          onCancel={handleImportCancel}
+        />
+      )}
     </div>
   );
 };

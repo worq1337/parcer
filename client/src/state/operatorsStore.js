@@ -448,8 +448,16 @@ export const useOperatorsStore = create(
         URL.revokeObjectURL(url);
       },
 
-      importDictionary: (file) => {
+      importDictionary: (fileOrData) => {
         return new Promise((resolve, reject) => {
+          // Если передан массив, используем его напрямую
+          if (Array.isArray(fileOrData)) {
+            set({ operators: fileOrData });
+            resolve({ success: true, count: fileOrData.length });
+            return;
+          }
+
+          // Иначе обрабатываем как файл (обратная совместимость)
           const reader = new FileReader();
           reader.onload = (e) => {
             try {
@@ -461,7 +469,7 @@ export const useOperatorsStore = create(
             }
           };
           reader.onerror = reject;
-          reader.readAsText(file);
+          reader.readAsText(fileOrData);
         });
       },
     }),

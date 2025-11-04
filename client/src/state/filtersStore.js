@@ -283,7 +283,11 @@ export const useFiltersStore = create(
           advancedFilters,
         } = get();
 
-        let filtered = [...checks];
+        const safeChecks = Array.isArray(checks)
+          ? checks.filter(Boolean)
+          : [];
+
+        let filtered = [...safeChecks];
 
         // P2P фильтр
         if (p2pFilter === 'p2p') {
@@ -351,11 +355,12 @@ export const useFiltersStore = create(
         // Быстрый поиск
         if (quickSearch) {
           const searchLower = quickSearch.toLowerCase();
-          filtered = filtered.filter((check) =>
-            Object.values(check).some((value) =>
-              String(value).toLowerCase().includes(searchLower)
-            )
-          );
+          filtered = filtered.filter((check) => {
+            if (!check) return false;
+            return Object.values(check).some((value) =>
+              String(value ?? '').toLowerCase().includes(searchLower)
+            );
+          });
         }
 
         // Расширенные фильтры

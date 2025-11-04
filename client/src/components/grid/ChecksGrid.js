@@ -1083,6 +1083,7 @@ const ChecksGrid = ({
     applyFilters,
     columnSettings,
     setColumnWidth,
+    setColumnOrder,
     cellDensity,
     setCellDensity,
     dateFilter,
@@ -3091,11 +3092,11 @@ const ChecksGrid = ({
       const columnState = api.getColumnState();
       const newOrder = columnState.map(col => col.colId);
 
-      // TODO: Сохранить порядок в settings.json через Zustand (patch-007 §7)
-      console.log('New column order:', newOrder);
-      toast.info('Порядок колонок изменён');
+      // Сохраняем порядок в Zustand
+      setColumnOrder(newOrder);
+      console.log('New column order saved:', newOrder);
     }
-  }, []);
+  }, [setColumnOrder]);
 
   // patch-013: Обработчик фокуса на ячейке (активная ячейка)
   const onCellFocused = useCallback((event) => {
@@ -3168,13 +3169,28 @@ const ChecksGrid = ({
       defaultState: { sort: null },
     });
 
+    // Применяем сохранённый порядок колонок из Zustand
+    if (columnSettings.order && columnSettings.order.length > 0) {
+      const columnState = columnSettings.order.map((colId, index) => ({
+        colId,
+        sortIndex: index,
+      }));
+
+      params.api.applyColumnState({
+        state: columnState,
+        applyOrder: true,
+      });
+
+      console.log('Applied saved column order:', columnSettings.order);
+    }
+
     // Сохраняем ссылку на API если нужно
     if (gridApiRef && typeof gridApiRef === 'function') {
       gridApiRef(params.api);
     } else if (gridApiRef && typeof gridApiRef === 'object') {
       gridApiRef.current = params.api;
     }
-  }, [gridApiRef]);
+  }, [gridApiRef, columnSettings.order]);
 
   // Для просмотра деталей - кнопка Info в правой колонке
   const onRowDoubleClicked = useCallback((event) => {

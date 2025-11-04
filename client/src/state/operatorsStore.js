@@ -111,6 +111,18 @@ export const useOperatorsStore = create(
       },
 
       /**
+       * Получить статистику по P2P операторам
+       * Возвращает: { all: number, p2p: number, nonP2p: number }
+       */
+      getP2PStats: () => {
+        const { operators } = get();
+        const all = operators.length;
+        const p2p = operators.filter(op => op.isP2P === true).length;
+        const nonP2p = operators.filter(op => op.isP2P === false).length;
+        return { all, p2p, nonP2p };
+      },
+
+      /**
        * Получить операторов, сгруппированных по приложениям
        * Возвращает: { [appName]: Operator[] }
        */

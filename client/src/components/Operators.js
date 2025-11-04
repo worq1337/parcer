@@ -28,6 +28,7 @@ const Operators = ({ onClose }) => {
     getFilteredOperators,
     getGroupedOperators,
     getUniqueApps,
+    getP2PStats,
     selectedOperator,
     editMode,
     searchQuery,
@@ -80,6 +81,8 @@ const Operators = ({ onClose }) => {
   ]);
 
   const uniqueApps = useMemo(() => getUniqueApps(), [getUniqueApps]);
+
+  const p2pStats = useMemo(() => getP2PStats(), [getP2PStats]);
 
   // Локальное состояние для редактирования
   const [formData, setFormData] = useState({
@@ -361,18 +364,33 @@ const Operators = ({ onClose }) => {
               ))}
             </select>
 
-            <select
-              className="filter-select"
-              value={filterByP2P === null ? '' : filterByP2P.toString()}
-              onChange={(e) => {
-                const value = e.target.value;
-                setFilterByP2P(value === '' ? null : value === 'true');
-              }}
-            >
-              <option value="">Все типы</option>
-              <option value="true">Только P2P</option>
-              <option value="false">Не P2P</option>
-            </select>
+            {/* Pill-кнопки для фильтра P2P */}
+            <div className="pill-button-group">
+              <button
+                className={`pill-button ${filterByP2P === null ? 'active' : ''}`}
+                onClick={() => setFilterByP2P(null)}
+                title="Показать все операторы"
+              >
+                <span>Все</span>
+                <span className="pill-count">{p2pStats.all}</span>
+              </button>
+              <button
+                className={`pill-button ${filterByP2P === true ? 'active' : ''}`}
+                onClick={() => setFilterByP2P(true)}
+                title="Только P2P операторы"
+              >
+                <span>P2P</span>
+                <span className="pill-count">{p2pStats.p2p}</span>
+              </button>
+              <button
+                className={`pill-button ${filterByP2P === false ? 'active' : ''}`}
+                onClick={() => setFilterByP2P(false)}
+                title="Не P2P операторы"
+              >
+                <span>Не P2P</span>
+                <span className="pill-count">{p2pStats.nonP2p}</span>
+              </button>
+            </div>
 
             <label className="filter-checkbox">
               <input

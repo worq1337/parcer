@@ -1084,6 +1084,7 @@ const ChecksGrid = ({
     columnSettings,
     setColumnWidth,
     setColumnOrder,
+    resetColumnSettings,
     cellDensity,
     setCellDensity,
     dateFilter,
@@ -1791,10 +1792,19 @@ const ChecksGrid = ({
 
     const api = gridRef.current.api;
     if (api) {
-      api.autoSizeColumns([params.column.getColId()]);
+      const column = params.column;
+      api.autoSizeColumns([column.getColId()]);
+
+      // Сохраняем новую ширину в Zustand
+      const colDef = column.getColDef();
+      if (colDef.field) {
+        const width = column.getActualWidth();
+        setColumnWidth(colDef.field, width);
+      }
+
       toast.success('Ширина колонки подогнана');
     }
-  }, []);
+  }, [setColumnWidth]);
 
   const handleResetColumnWidth = useCallback((params) => {
     if (!gridRef.current || !params.column) return;
@@ -1803,9 +1813,13 @@ const ChecksGrid = ({
     const colDef = column.getColDef();
     if (colDef.field) {
       column.setActualWidth(colDef.width || 100);
+
+      // Удаляем сохранённую ширину из Zustand (устанавливаем undefined)
+      setColumnWidth(colDef.field, undefined);
+
       toast.success('Ширина колонки сброшена');
     }
-  }, []);
+  }, [setColumnWidth]);
 
   const handleSetDensity = useCallback((density) => {
     setCellDensity(density);
@@ -3210,9 +3224,22 @@ const ChecksGrid = ({
     if (api) {
       // Автоматически подгоняем ширину всех колонок
       api.autoSizeAllColumns(false);
-      toast.success('Ширина колонок подогнана');
+
+      // Сохраняем новые ширины в Zustand
+      const allColumns = api.getAllGridColumns();
+      if (allColumns) {
+        allColumns.forEach((column) => {
+          const colDef = column.getColDef();
+          if (colDef.field) {
+            const width = column.getActualWidth();
+            setColumnWidth(colDef.field, width);
+          }
+        });
+      }
+
+      toast.success('Ширина колонок подогнана и сохранена');
     }
-  }, []);
+  }, [setColumnWidth]);
 
   // Сброс ширины колонок (patch-003 §4)
   const handleResetWidths = useCallback(() => {
@@ -3230,10 +3257,13 @@ const ChecksGrid = ({
             api.setColumnWidth(column.getColId(), colDef.width || 100);
           }
         });
+
+        // Очищаем сохранённые ширины в Zustand
+        resetColumnSettings();
         toast.success('Ширина колонок сброшена');
       }
     }
-  }, []);
+  }, [resetColumnSettings]);
 
   useEffect(() => {
     const gridInstance = gridRef.current;

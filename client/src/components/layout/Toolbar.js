@@ -5,6 +5,8 @@ import { useFiltersStore } from '../../state/filtersStore';
 import { useSettingsStore } from '../../state/settingsStore'; // patch-008 §9
 import Icon from '../icons/Icon';
 import FiltersPanel from '../grid/FiltersPanel';
+import SplitButton from '../common/SplitButton';
+import FiltersQuickMenu from './FiltersQuickMenu';
 import '../../styles/Toolbar.css';
 import { adminAPI } from '../../services/api';
 
@@ -544,18 +546,22 @@ const Toolbar = ({
 
           <div className="toolbar-divider" />
 
-          {/* Фильтры с бейджем */}
-          <button
-            className={`toolbar-button ${filtersPanelOpen ? 'active' : ''}`}
+          {/* Фильтры с бейджем - SplitButton */}
+          <SplitButton
+            variant="secondary"
+            active={filtersPanelOpen}
             onClick={toggleFiltersPanel}
-            title="Фильтры (Ctrl/Cmd+Shift+F)"
+            dropdownContent={<FiltersQuickMenu />}
+            title="Открыть панель фильтров (Ctrl/Cmd+Shift+F)"
+            dropdownTitle="Быстрые фильтры и сохранённые наборы"
+            className="filters-split-button"
           >
             <Icon name="filter_list" size={20} />
             <span>Фильтры</span>
             {activeFiltersCount > 0 && (
               <span className="filter-badge">{activeFiltersCount}</span>
             )}
-          </button>
+          </SplitButton>
 
           <div className="toolbar-divider" />
 

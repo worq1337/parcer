@@ -322,3 +322,20 @@
     min-width: 100%;
   }
 }
+
+/* Split Button Integration */
+.filters-split-button .split-button-main,
+.filters-split-button .split-button-dropdown {
+  height: 32px;
+  font-size: 14px;
+}
+
+.filters-split-button .filter-badge {
+  position: relative;
+  top: 0;
+}
+
+/* Tooltip enhancement for filter badge */
+.filters-split-button:hover .filter-badge-tooltip {
+  display: block;
+}

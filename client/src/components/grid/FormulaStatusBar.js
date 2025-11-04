@@ -452,6 +452,7 @@ const FormulaStatusBar = React.forwardRef(({
   };
 
   // Вычисление сводных данных по выделению
+  // УЛУЧШЕНО: теперь работает для ВСЕХ числовых значений, не только amount/balance
   const aggregates = useMemo(() => {
     if (!gridApi || selectedRanges.length === 0) return null;
 
@@ -469,14 +470,22 @@ const FormulaStatusBar = React.forwardRef(({
             const field = col.getColDef().field;
             const value = rowNode.data[field];
 
-            // Только числовые значения
-            if (field === 'amount' || field === 'balance') {
-              if (typeof value === 'number' && !isNaN(value)) {
-                values.push(value);
-              } else if (typeof value === 'string') {
-                const num = parseFloat(value.replace(',', '.'));
-                if (!isNaN(num)) values.push(num);
+            // Попытка преобразовать любое значение в число
+            let numValue = null;
+
+            if (typeof value === 'number' && !isNaN(value)) {
+              numValue = value;
+            } else if (typeof value === 'string' && value.trim() !== '') {
+              // Убираем пробелы и заменяем запятую на точку
+              const cleaned = value.replace(/\s/g, '').replace(',', '.');
+              const parsed = parseFloat(cleaned);
+              if (!isNaN(parsed)) {
+                numValue = parsed;
               }
+            }
+
+            if (numValue !== null) {
+              values.push(numValue);
             }
           });
         }

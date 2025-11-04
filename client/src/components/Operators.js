@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { useOperatorsStore } from '../state/operatorsStore';
+import { formatRelativeDate } from '../utils/formatters';
 import Icon from './icons/Icon';
 import HighlightedText from './common/HighlightedText';
 import StatusIndicator from './common/StatusIndicator';
@@ -508,13 +509,14 @@ const Operators = ({ onClose }) => {
                     <th>Приложение</th>
                     <th className="text-center">P2P</th>
                     <th>Синонимы</th>
+                    <th>Обновлено</th>
                     <th className="text-center">Действия</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredOperators.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="text-center text-muted">
+                      <td colSpan="8" className="text-center text-muted">
                         Операторы не найдены
                       </td>
                     </tr>
@@ -560,6 +562,14 @@ const Operators = ({ onClose }) => {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td
+                          onClick={() => selectOperator(operator)}
+                          className="text-muted"
+                          style={{ fontSize: '12px' }}
+                          title={operator.updatedAt ? new Date(operator.updatedAt).toLocaleString('ru-RU') : ''}
+                        >
+                          {operator.updatedAt ? formatRelativeDate(operator.updatedAt) : '—'}
                         </td>
                         <td className="text-center">
                           <button
@@ -662,6 +672,19 @@ const Operators = ({ onClose }) => {
                                         </span>
                                       )}
                                     </div>
+                                    {operator.updatedAt && (
+                                      <div
+                                        className="operator-updated"
+                                        style={{
+                                          fontSize: '11px',
+                                          color: 'var(--color-text-tertiary, #999)',
+                                          marginTop: '4px'
+                                        }}
+                                        title={new Date(operator.updatedAt).toLocaleString('ru-RU')}
+                                      >
+                                        {formatRelativeDate(operator.updatedAt)}
+                                      </div>
+                                    )}
                                   </div>
 
                                   <div className="operator-card-actions">

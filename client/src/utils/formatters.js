@@ -247,3 +247,50 @@ export const normalizeP2PInput = (value) => {
   }
   return true;
 };
+
+/**
+ * Форматирование относительной даты обновления
+ * Показывает "только что", "сегодня", "вчера", "3 дня назад", "12.04.2025"
+ * @param {string} dateString - ISO строка даты
+ * @returns {string} Отформатированная относительная дата
+ */
+export const formatRelativeDate = (dateString) => {
+  if (!dateString) return '';
+
+  const dt = DateTime.fromISO(dateString, { zone: TASHKENT });
+  if (!dt.isValid) return '';
+
+  const now = DateTime.now().setZone(TASHKENT);
+  const diff = now.diff(dt, ['days', 'hours', 'minutes']).toObject();
+
+  // Только что (менее 1 минуты)
+  if (diff.minutes < 1) {
+    return 'только что';
+  }
+
+  // Менее часа назад
+  if (diff.hours < 1) {
+    const mins = Math.floor(diff.minutes);
+    return `${mins} мин. назад`;
+  }
+
+  // Сегодня
+  if (dt.hasSame(now, 'day')) {
+    return `сегодня в ${dt.toFormat('HH:mm')}`;
+  }
+
+  // Вчера
+  const yesterday = now.minus({ days: 1 });
+  if (dt.hasSame(yesterday, 'day')) {
+    return `вчера в ${dt.toFormat('HH:mm')}`;
+  }
+
+  // Менее 7 дней назад
+  if (diff.days < 7) {
+    const days = Math.floor(diff.days);
+    return `${days} дн. назад`;
+  }
+
+  // Более 7 дней - показываем дату
+  return dt.toFormat('dd.MM.yyyy');
+};

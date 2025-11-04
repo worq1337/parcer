@@ -19,10 +19,12 @@ import HotkeysModal from './components/HotkeysModal'; // patch-010 §4
 import UpdateBanner from './components/UpdateBanner'; // patch-021: Updates banner
 import SplashScreen from './components/SplashScreen'; // patch-021: Splash screen
 import LicenseKeyModal from './components/LicenseKeyModal'; // patch-022: License key validation
+import ColumnVisibilityModal from './components/ColumnVisibilityModal'; // Column visibility management
 
 import { useChecksStore } from './state/checksStore';
 import { useFiltersStore } from './state/filtersStore';
 import { useSettingsStore } from './state/settingsStore';
+import { useCellStylesStore } from './state/cellStylesStore'; // Cell formatting
 import { exportToExcel, importFromExcel } from './utils/excelExport';
 import { toast } from 'react-toastify';
 import useHotkeys from './hooks/useHotkeys';
@@ -47,9 +49,11 @@ function MainAppShell({ resolvedTheme }) {
   const [isHotkeysModalOpen, setIsHotkeysModalOpen] = useState(false); // patch-010 §4
   const [showSplash, setShowSplash] = useState(true); // patch-021: Splash screen
   const [showUpdateBanner, setShowUpdateBanner] = useState(true); // patch-021: Update banner
+  const [isColumnVisibilityModalOpen, setIsColumnVisibilityModalOpen] = useState(false); // Column visibility modal
 
   const { loadChecks, checks } = useChecksStore();
   const { toggleFiltersPanel, cycleCellDensity, setFiltersPanelOpen, filtersPanelOpen } = useFiltersStore();
+  const { setAlignment, setWrapText } = useCellStylesStore(); // Cell formatting methods
 
   // Рефы для методов ChecksGrid
   const autoFitColumnsRef = useRef(null);
@@ -320,6 +324,95 @@ function MainAppShell({ resolvedTheme }) {
     }
   };
 
+  // NEW: Show column visibility modal
+  const handleShowColumnVisibility = () => {
+    setIsColumnVisibilityModalOpen(true);
+  };
+
+  // NEW: Apply alignment to selected cells
+  const handleApplyAlignment = (alignment) => {
+    const api = gridApiRef.current;
+    if (!api) {
+      toast.warning('Grid API не готов');
+      return;
+    }
+
+    const cellRanges = api.getCellRanges();
+    if (!cellRanges || cellRanges.length === 0) {
+      toast.warning('Выделите ячейки для применения выравнивания');
+      return;
+    }
+
+    let cellsUpdated = 0;
+
+    cellRanges.forEach(range => {
+      const startRow = Math.min(range.startRow.rowIndex, range.endRow.rowIndex);
+      const endRow = Math.max(range.startRow.rowIndex, range.endRow.rowIndex);
+      const columns = range.columns || [];
+
+      columns.forEach(column => {
+        const field = column.getColDef().field;
+
+        for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+          const rowNode = api.getDisplayedRowAtIndex(rowIndex);
+          if (rowNode && rowNode.data) {
+            const checkId = rowNode.data.id;
+            setAlignment(checkId, field, alignment);
+            cellsUpdated++;
+          }
+        }
+      });
+    });
+
+    api.refreshCells({ force: true });
+
+    const alignmentNames = {
+      left: 'левому краю',
+      center: 'центру',
+      right: 'правому краю'
+    };
+    toast.success(`Выравнивание по ${alignmentNames[alignment]} применено к ${cellsUpdated} ячейкам`);
+  };
+
+  // NEW: Apply wrap text to selected cells
+  const handleApplyWrapText = (wrap = true) => {
+    const api = gridApiRef.current;
+    if (!api) {
+      toast.warning('Grid API не готов');
+      return;
+    }
+
+    const cellRanges = api.getCellRanges();
+    if (!cellRanges || cellRanges.length === 0) {
+      toast.warning('Выделите ячейки для применения переноса текста');
+      return;
+    }
+
+    let cellsUpdated = 0;
+
+    cellRanges.forEach(range => {
+      const startRow = Math.min(range.startRow.rowIndex, range.endRow.rowIndex);
+      const endRow = Math.max(range.startRow.rowIndex, range.endRow.rowIndex);
+      const columns = range.columns || [];
+
+      columns.forEach(column => {
+        const field = column.getColDef().field;
+
+        for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+          const rowNode = api.getDisplayedRowAtIndex(rowIndex);
+          if (rowNode && rowNode.data) {
+            const checkId = rowNode.data.id;
+            setWrapText(checkId, field, wrap);
+            cellsUpdated++;
+          }
+        }
+      });
+    });
+
+    api.refreshCells({ force: true });
+    toast.success(`Перенос текста применен к ${cellsUpdated} ячейкам`);
+  };
+
   // patch-013: Обработка изменения значения ячейки из FormulaStatusBar
   const handleCellValueChange = () => {
     if (gridApiRef.current) {
@@ -492,6 +585,9 @@ function MainAppShell({ resolvedTheme }) {
             onShowHelp={() => setIsHelpModalOpen(true)}
             onShowSettings={() => setCurrentView('settings')}
             onShowHotkeys={() => setIsHotkeysModalOpen(true)}
+            onShowColumnVisibility={handleShowColumnVisibility}
+            onApplyAlignment={handleApplyAlignment}
+            onApplyWrapText={handleApplyWrapText}
           />
 
           {/* Чипы активных фильтров - patch-004 §2 */}
@@ -605,6 +701,14 @@ function MainAppShell({ resolvedTheme }) {
           setIsHotkeysModalOpen(false);
           returnFocusToGrid();
         }}
+      />
+
+      {/* Column visibility modal */}
+      <ColumnVisibilityModal
+        isOpen={isColumnVisibilityModalOpen}
+        onClose={() => setIsColumnVisibilityModalOpen(false)}
+        columnDefs={null} // Will be set dynamically from ChecksGrid
+        api={gridApiRef.current}
       />
 
       <ToastContainer

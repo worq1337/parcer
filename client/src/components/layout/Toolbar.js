@@ -12,7 +12,20 @@ import { adminAPI } from '../../services/api';
  * Тулбар с кнопками действий и фильтрами
  * Обновлён согласно patch-006 §10, §11, §9
  */
-const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidths, filterScrollSection, onShowHelp, onShowSettings, onShowHotkeys }) => {
+const Toolbar = ({
+  onImport,
+  onExport,
+  onRefresh,
+  onAutoFitColumns,
+  onResetWidths,
+  filterScrollSection,
+  onShowHelp,
+  onShowSettings,
+  onShowHotkeys,
+  onShowColumnVisibility, // NEW: callback для показа модального окна колонок
+  onApplyAlignment, // NEW: callback для применения выравнивания к выделенным ячейкам
+  onApplyWrapText, // NEW: callback для применения переноса к выделенным ячейкам
+}) => {
   const { canUndo, undo, canRedo, redo } = useChecksStore();
   const {
     quickSearch,
@@ -31,6 +44,7 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
 
   const [showFileMenu, setShowFileMenu] = useState(false); // patch-006 §11
   const [showViewMenu, setShowViewMenu] = useState(false); // patch-006 §12
+  const [showAlignmentMenu, setShowAlignmentMenu] = useState(false); // NEW: submenu для выравнивания
 
   // FIX: Use useRef instead of window.searchDebounce for proper cleanup
   const searchDebounceRef = useRef(null);
@@ -373,8 +387,10 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
                 <button
                   className="dropdown-item"
                   onClick={() => {
-                    // TODO: Открыть диалог управления колонками
                     setShowViewMenu(false);
+                    if (onShowColumnVisibility) {
+                      onShowColumnVisibility();
+                    }
                   }}
                 >
                   <Icon name="view_column" size={18} />
@@ -386,20 +402,61 @@ const Toolbar = ({ onImport, onExport, onRefresh, onAutoFitColumns, onResetWidth
                 {/* patch-008 §9: Текст */}
                 <div className="dropdown-section">
                   <div className="dropdown-section-title">Текст</div>
+
+                  {/* Submenu для выравнивания */}
+                  <div className="dropdown-item-with-submenu">
+                    <button
+                      className="dropdown-item"
+                      onClick={() => setShowAlignmentMenu(!showAlignmentMenu)}
+                    >
+                      <Icon name="format_align_left" size={18} />
+                      <span>Выравнивание в выделении</span>
+                      <Icon name="chevron_right" size={16} className="submenu-arrow" />
+                    </button>
+
+                    {showAlignmentMenu && (
+                      <div className="dropdown-submenu">
+                        <button
+                          className="dropdown-item"
+                          onClick={() => {
+                            if (onApplyAlignment) onApplyAlignment('left');
+                            setShowAlignmentMenu(false);
+                            setShowViewMenu(false);
+                          }}
+                        >
+                          <Icon name="format_align_left" size={18} />
+                          <span>По левому краю</span>
+                        </button>
+                        <button
+                          className="dropdown-item"
+                          onClick={() => {
+                            if (onApplyAlignment) onApplyAlignment('center');
+                            setShowAlignmentMenu(false);
+                            setShowViewMenu(false);
+                          }}
+                        >
+                          <Icon name="format_align_center" size={18} />
+                          <span>По центру</span>
+                        </button>
+                        <button
+                          className="dropdown-item"
+                          onClick={() => {
+                            if (onApplyAlignment) onApplyAlignment('right');
+                            setShowAlignmentMenu(false);
+                            setShowViewMenu(false);
+                          }}
+                        >
+                          <Icon name="format_align_right" size={18} />
+                          <span>По правому краю</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     className="dropdown-item"
                     onClick={() => {
-                      // TODO: Выравнивание в выделении
-                      setShowViewMenu(false);
-                    }}
-                  >
-                    <Icon name="format_align_left" size={18} />
-                    <span>Выравнивание в выделении</span>
-                  </button>
-                  <button
-                    className="dropdown-item"
-                    onClick={() => {
-                      // TODO: Перенос по словам
+                      if (onApplyWrapText) onApplyWrapText(true);
                       setShowViewMenu(false);
                     }}
                   >

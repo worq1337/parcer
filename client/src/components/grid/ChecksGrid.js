@@ -1262,8 +1262,8 @@ const ChecksGrid = ({
       null;
 
     // Get column-level settings from filtersStore (applied to all cells in column)
-    const columnAlignment = columnSettings.alignment[field];
-    const columnWrapText = columnSettings.wrapText[field];
+    const columnAlignment = columnSettings?.alignment?.[field];
+    const columnWrapText = columnSettings?.wrapText?.[field];
 
     const mergedStyle = {
       ...baseStyle,
@@ -1437,7 +1437,7 @@ const ChecksGrid = ({
     {
       headerName: '№',
       field: 'id', // Сохраняем 'id' как идентификатор колонки для настроек
-      width: columnSettings.widths['id'] || 64,
+      width: columnSettings?.widths?.['id'] || 64,
       filter: 'agNumberColumnFilter',
       pinned: 'left',
       cellClass: 'cell-number',
@@ -1456,7 +1456,7 @@ const ChecksGrid = ({
     {
       headerName: 'Дата и время',
       field: 'datetime',
-      width: columnSettings.widths['datetime'] || 180,
+      width: columnSettings?.widths?.['datetime'] || 180,
       filter: 'agDateColumnFilter',
       editable: true, // patch-007 §1
       cellEditor: 'agTextCellEditor', // TODO: Комбинированный date+time редактор
@@ -1475,7 +1475,7 @@ const ChecksGrid = ({
     {
       headerName: 'Д.н.',
       field: 'weekday',
-      width: columnSettings.widths['weekday'] || 56,
+      width: columnSettings?.widths?.['weekday'] || 56,
       filter: 'agTextColumnFilter',
       cellClass: 'cell-centered',
       editable: false,
@@ -1490,7 +1490,7 @@ const ChecksGrid = ({
     {
       headerName: 'Дата',
       field: 'date_display',
-      width: columnSettings.widths['date_display'] || 84,
+      width: columnSettings?.widths?.['date_display'] || 84,
       filter: 'agTextColumnFilter',
       editable: false,
       cellClass: 'cell-monospace',
@@ -1498,7 +1498,7 @@ const ChecksGrid = ({
     {
       headerName: 'Время',
       field: 'time_display',
-      width: columnSettings.widths['time_display'] || 72,
+      width: columnSettings?.widths?.['time_display'] || 72,
       filter: 'agTextColumnFilter',
       editable: false,
       cellClass: 'cell-monospace',
@@ -1506,7 +1506,7 @@ const ChecksGrid = ({
     {
       headerName: 'Оператор/Продавец',
       field: 'operator',
-      width: columnSettings.widths['operator'] || 260,
+      width: columnSettings?.widths?.['operator'] || 260,
       filter: 'agTextColumnFilter',
       editable: true,
       cellEditor: 'agTextCellEditor', // TODO: Автокомплит по словарю операторов (patch-007 §1)
@@ -1525,7 +1525,7 @@ const ChecksGrid = ({
     {
       headerName: 'Приложение',
       field: 'app',
-      width: columnSettings.widths['app'] || 120,
+      width: columnSettings?.widths?.['app'] || 120,
       filter: 'agTextColumnFilter',
       editable: true, // patch-007 §1: выпадающий список
       cellEditor: 'agSelectCellEditor',
@@ -1557,7 +1557,7 @@ const ChecksGrid = ({
     {
       headerName: 'Сумма',
       field: 'amount',
-      width: columnSettings.widths['amount'] || 140,
+      width: columnSettings?.widths?.['amount'] || 140,
       filter: 'agNumberColumnFilter',
       editable: true,
       cellEditor: 'agTextCellEditor', // patch-007 §1: текстовый для ввода запятой
@@ -1592,7 +1592,7 @@ const ChecksGrid = ({
     {
       headerName: 'Остаток',
       field: 'balance',
-      width: columnSettings.widths['balance'] || 140,
+      width: columnSettings?.widths?.['balance'] || 140,
       filter: 'agNumberColumnFilter',
       editable: true,
       cellEditor: 'agTextCellEditor', // patch-007 §1: текстовый для ввода запятой
@@ -1620,7 +1620,7 @@ const ChecksGrid = ({
     {
       headerName: 'ПК',
       field: 'card_last4',
-      width: columnSettings.widths['card_last4'] || 84,
+      width: columnSettings?.widths?.['card_last4'] || 84,
       filter: 'agTextColumnFilter',
       editable: true,
       cellEditor: 'agTextCellEditor',
@@ -1634,7 +1634,7 @@ const ChecksGrid = ({
     {
       headerName: 'P2P',
       field: 'is_p2p',
-      width: columnSettings.widths['is_p2p'] || 72,
+      width: columnSettings?.widths?.['is_p2p'] || 72,
       filter: 'agTextColumnFilter',
       editable: true, // patch-006 §6: делаем редактируемым
       valueFormatter: params => {
@@ -1652,7 +1652,7 @@ const ChecksGrid = ({
     {
       headerName: 'Тип',
       field: 'transaction_type',
-      width: columnSettings.widths['transaction_type'] || 140,
+      width: columnSettings?.widths?.['transaction_type'] || 140,
       filter: 'agTextColumnFilter',
       editable: true,
       cellEditor: 'agSelectCellEditor',
@@ -1671,7 +1671,7 @@ const ChecksGrid = ({
     {
       headerName: 'Валюта',
       field: 'currency',
-      width: columnSettings.widths['currency'] || 84,
+      width: columnSettings?.widths?.['currency'] || 84,
       filter: 'agTextColumnFilter',
       editable: true,
       cellEditor: 'agSelectCellEditor',
@@ -1683,7 +1683,7 @@ const ChecksGrid = ({
     {
       headerName: 'Источник',
       field: 'source',
-      width: columnSettings.widths['source'] || 120,
+      width: columnSettings?.widths?.['source'] || 120,
       filter: 'agSetColumnFilter',
       filterParams: {
         values: SOURCE_OPTIONS,
@@ -1728,7 +1728,7 @@ const ChecksGrid = ({
     {
       headerName: '',
       field: 'info',
-      width: columnSettings.widths['info'] || 48,
+      width: columnSettings?.widths?.['info'] || 48,
       pinned: 'right',
       sortable: false,
       filter: false,

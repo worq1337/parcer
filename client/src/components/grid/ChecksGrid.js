@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { useChecksStore } from '../../state/checksStore';
 import { useFiltersStore } from '../../state/filtersStore';
 import { useCellStylesStore } from '../../state/cellStylesStore';
+import { useFilteredChecks } from '../../hooks/useFilteredChecks';
 import { formatAmount, formatBalance, formatCardLast4, formatP2P } from '../../utils/formatters';
 import { prepareForApi, shouldShowToast } from '../../utils/modelTransform';
 import {
@@ -1080,7 +1081,6 @@ const ChecksGrid = ({
     p2pFilter,
     currencyFilter,
     quickSearch,
-    applyFilters,
     columnSettings,
     setColumnWidth,
     setColumnOrder,
@@ -1102,11 +1102,10 @@ const ChecksGrid = ({
   //   loadChecks();
   // }, [loadChecks]);
 
-  // Применение фильтров
-  // FIX: Убраны избыточные зависимости - applyFilters сам использует все фильтры из store
-  const filteredChecks = useMemo(() => {
-    return applyFilters(checks);
-  }, [checks, applyFilters]);
+  // Применение фильтров с оптимизированной мемоизацией
+  // Использует специальный хук useFilteredChecks, который отслеживает изменения
+  // всех фильтров и checks, предотвращая лишние пересчеты
+  const filteredChecks = useFilteredChecks();
 
   // patch-013: Передаем gridApi наружу через ref
   useEffect(() => {

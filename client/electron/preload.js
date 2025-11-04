@@ -120,7 +120,12 @@ contextBridge.exposeInMainWorld('electron', {
       });
     },
 
-    // Remove listeners
+    // Remove specific listener
+    removeListener: (event, callback) => {
+      ipcRenderer.removeListener(event, callback);
+    },
+
+    // Remove listeners (deprecated - use removeListener instead)
     removeAllListeners: () => {
       ipcRenderer.removeAllListeners('update-available');
       ipcRenderer.removeAllListeners('update-not-available');

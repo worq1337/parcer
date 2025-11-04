@@ -762,6 +762,7 @@ const ChecksGrid = ({
   onResetWidths,
   onActiveCellChange,
   onSelectionRangesChange,
+  onExportSelected,
   gridApiRef,
   resolvedTheme = 'light',
 }) => {
@@ -1230,9 +1231,25 @@ const ChecksGrid = ({
 
   // patch-012: Функция для применения пользовательских стилей к ячейкам
   const applyCellStyle = useCallback((params, baseStyle = {}) => {
-    if (!params || !params.data || !params.colDef || !params.colDef.field) return baseStyle;
+    // CRITICAL FIX v4: Early return if params or data is missing
+    if (!params || !params.colDef || !params.colDef.field) {
+      return baseStyle;
+    }
 
-    const checkId = params.data.id;
+    const rowData = params.data;
+    if (!rowData || typeof rowData !== 'object') {
+      return baseStyle;
+    }
+
+    // Safe access to rowData.id with additional checks
+    const checkId = (rowData && typeof rowData === 'object' && 'id' in rowData)
+      ? rowData.id
+      : params.node?.id;
+
+    if (!checkId && checkId !== 0) {
+      return baseStyle;
+    }
+
     const rowNodeId = params.node?.id ?? checkId;
     const field = params.colDef.field;
     const userStyle = getCellStyle(checkId, field);
@@ -1461,11 +1478,13 @@ const ChecksGrid = ({
       filter: 'agTextColumnFilter',
       cellClass: 'cell-centered',
       editable: false,
-      cellStyle: (params) =>
-        applyCellStyle(params, {
+      cellStyle: (params) => {
+        if (!params || !params.data) return {};
+        return applyCellStyle(params, {
           color: 'var(--color-text-secondary)',
           fontWeight: '500',
-        }),
+        });
+      },
     },
     {
       headerName: 'Дата',
@@ -1492,11 +1511,14 @@ const ChecksGrid = ({
       cellEditor: 'agTextCellEditor', // TODO: Автокомплит по словарю операторов (patch-007 §1)
       wrapText: cellDensity === 'large', // patch-007 §2
       autoHeight: cellDensity === 'large', // patch-007 §2
-      cellStyle: (params) => applyCellStyle(params, {
-        whiteSpace: cellDensity === 'large' ? 'normal' : 'nowrap',
-        overflow: cellDensity === 'large' ? 'visible' : 'hidden',
-        textOverflow: cellDensity === 'large' ? 'clip' : 'ellipsis',
-      }),
+      cellStyle: (params) => {
+        if (!params || !params.data) return {};
+        return applyCellStyle(params, {
+          whiteSpace: cellDensity === 'large' ? 'normal' : 'nowrap',
+          overflow: cellDensity === 'large' ? 'visible' : 'hidden',
+          textOverflow: cellDensity === 'large' ? 'clip' : 'ellipsis',
+        });
+      },
       tooltipField: 'operator', // patch-007 §2: тултип с полным значением
     },
     {
@@ -1556,11 +1578,14 @@ const ChecksGrid = ({
         const strValue = String(params.newValue).replace(/\s/g, '').replace(',', '.');
         return parseFloat(strValue);
       },
-      cellStyle: (params) => applyCellStyle(params, {
-        // patch-007 §9: убираем цветную окраску, только монохром
-        textAlign: 'right',
-        fontVariantNumeric: 'tabular-nums',
-      }),
+      cellStyle: (params) => {
+        if (!params || !params.data) return {};
+        return applyCellStyle(params, {
+          // patch-007 §9: убираем цветную окраску, только монохром
+          textAlign: 'right',
+          fontVariantNumeric: 'tabular-nums',
+        });
+      },
       cellClass: 'cell-number',
     },
     {
@@ -1583,10 +1608,13 @@ const ChecksGrid = ({
         return parseFloat(strValue);
       },
       cellClass: 'cell-number',
-      cellStyle: (params) => applyCellStyle(params, {
-        textAlign: 'right',
-        fontVariantNumeric: 'tabular-nums',
-      }),
+      cellStyle: (params) => {
+        if (!params || !params.data) return {};
+        return applyCellStyle(params, {
+          textAlign: 'right',
+          fontVariantNumeric: 'tabular-nums',
+        });
+      },
     },
     {
       headerName: 'ПК',
@@ -1613,9 +1641,12 @@ const ChecksGrid = ({
         return formatP2P(params.value);
       },
       cellClass: 'cell-centered',
-      cellStyle: (params) => applyCellStyle(params, {
-        fontVariantNumeric: 'tabular-nums',
-      }),
+      cellStyle: (params) => {
+        if (!params || !params.data) return {};
+        return applyCellStyle(params, {
+          fontVariantNumeric: 'tabular-nums',
+        });
+      },
     },
     {
       headerName: 'Тип',
@@ -1736,7 +1767,10 @@ const ChecksGrid = ({
     floatingFilter: false, // Отключаем встроенные фильтры AG Grid
     suppressHeaderMenuButton: true, // patch-010 §1: Отключаем встроенное меню AG Grid
     headerComponent: CustomHeaderComponent, // patch-010 §1: Кастомный заголовок
-    cellStyle: (params) => applyCellStyle(params),
+    cellStyle: (params) => {
+      if (!params || !params.data) return {};
+      return applyCellStyle(params);
+    },
     editable: true,
   }), [CustomHeaderComponent, applyCellStyle]);
 

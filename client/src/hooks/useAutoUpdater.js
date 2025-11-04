@@ -79,9 +79,15 @@ export const useAutoUpdater = () => {
     updates.onDownloadProgress(handleDownloadProgress);
     updates.onUpdateDownloaded(handleUpdateDownloaded);
 
-    // Отписываемся при размонтировании
+    // Отписываемся при размонтировании - удаляем только наши обработчики
     return () => {
-      updates.removeAllListeners();
+      if (updates.removeListener) {
+        updates.removeListener('update-available', handleUpdateAvailable);
+        updates.removeListener('update-not-available', handleUpdateNotAvailable);
+        updates.removeListener('update-error', handleUpdateError);
+        updates.removeListener('update-download-progress', handleDownloadProgress);
+        updates.removeListener('update-downloaded', handleUpdateDownloaded);
+      }
     };
   }, []);
 

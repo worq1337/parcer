@@ -105,18 +105,38 @@ const ColumnMenu = ({ column, api, position, onClose, showTotalsRow, onToggleTot
   };
 
   const handleAggregateSelection = (type) => {
-    if (!api) return;
+    if (!api || !field) return;
 
-    const selectedRows = api.getSelectedRows();
-    if (selectedRows.length === 0) {
+    // Получаем выделенные диапазоны ячеек
+    const cellRanges = api.getCellRanges();
+    if (!cellRanges || cellRanges.length === 0) {
       toast.info('Выделите ячейки для расчёта агрегатов');
       return;
     }
 
-    const values = selectedRows
-      .map(row => row[field])
-      .filter(val => val !== null && val !== undefined && !isNaN(parseFloat(val)))
-      .map(val => parseFloat(String(val).replace(/\s/g, '').replace(',', '.')));
+    // Собираем значения из всех диапазонов для текущей колонки
+    const values = [];
+    cellRanges.forEach(range => {
+      const startRow = Math.min(range.startRow.rowIndex, range.endRow.rowIndex);
+      const endRow = Math.max(range.startRow.rowIndex, range.endRow.rowIndex);
+      const columns = range.columns || [];
+
+      // Проверяем, входит ли наша колонка в выделение
+      const hasOurColumn = columns.some(col => col.getColDef().field === field);
+
+      if (hasOurColumn) {
+        for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+          const rowNode = api.getDisplayedRowAtIndex(rowIndex);
+          if (rowNode && rowNode.data) {
+            const value = rowNode.data[field];
+            if (value !== null && value !== undefined && !isNaN(parseFloat(value))) {
+              const numValue = parseFloat(String(value).replace(/\s/g, '').replace(',', '.'));
+              values.push(numValue);
+            }
+          }
+        }
+      }
+    });
 
     if (values.length === 0) {
       toast.info('Нет числовых значений для расчёта');

@@ -90,21 +90,21 @@ export const importFromExcel = async (file) => {
     // Пропускаем заголовок
     if (rowNumber === 1) return;
 
+    // Структура совпадает с экспортом:
+    // 1: id, 2: datetime, 3: operator, 4: app, 5: amount, 6: balance,
+    // 7: card_last4, 8: is_p2p, 9: transaction_type, 10: currency, 11: source
     const check = {
-      datetime: row.getCell(2).value,
-      weekday: row.getCell(3).value,
-      dateDisplay: row.getCell(4).value,
-      timeDisplay: row.getCell(5).value,
-      operator: row.getCell(6).value,
-      app: row.getCell(7).value === '—' ? null : row.getCell(7).value,
-      amount: parseFloat(row.getCell(8).value),
-      balance: row.getCell(9).value ? parseFloat(row.getCell(9).value) : null,
-      cardLast4: row.getCell(10).value,
-      isP2p: row.getCell(11).value === '1',
-      transactionType: row.getCell(12).value,
-      currency: row.getCell(13).value,
-      source: row.getCell(14).value || 'Import',
-      addedVia: 'import'
+      // id не импортируем (будет создан на сервере)
+      datetime: row.getCell(2).value, // Формат: "ДД.ММ.ГГГГ ЧЧ:ММ"
+      operator: row.getCell(3).value,
+      app: row.getCell(4).value === '—' ? null : row.getCell(4).value,
+      amount: parseFloat(row.getCell(5).value),
+      balance: row.getCell(6).value ? parseFloat(row.getCell(6).value) : null,
+      card_last4: row.getCell(7).value, // Только 4 цифры
+      is_p2p: row.getCell(8).value === '1',
+      transaction_type: row.getCell(9).value,
+      currency: row.getCell(10).value,
+      source: row.getCell(11).value || 'Import'
     };
 
     checks.push(check);

@@ -23,7 +23,7 @@ import LicenseKeyModal from './components/LicenseKeyModal'; // patch-022: Licens
 import { useChecksStore } from './state/checksStore';
 import { useFiltersStore } from './state/filtersStore';
 import { useSettingsStore } from './state/settingsStore';
-import { exportToExcel } from './utils/excelExport';
+import { exportToExcel, importFromExcel } from './utils/excelExport';
 import { toast } from 'react-toastify';
 import useHotkeys from './hooks/useHotkeys';
 import notificationService from './services/notificationService'; // patch-017 §5
@@ -196,19 +196,116 @@ function MainAppShell({ resolvedTheme }) {
     }, 100);
   };
 
-  const handleExport = async () => {
+  const handleExport = async (type = 'all') => {
     try {
-      await exportToExcel(checks);
-      toast.success('Экспорт завершён');
+      let dataToExport = [];
+
+      switch (type) {
+        case 'visible':
+          // Экспорт видимых (отфильтрованных) строк
+          if (gridApiRef.current) {
+            const rowData = [];
+            gridApiRef.current.forEachNodeAfterFilter((node) => {
+              if (node.data) rowData.push(node.data);
+            });
+            dataToExport = rowData;
+          } else {
+            dataToExport = checks;
+          }
+          break;
+
+        case 'selected':
+          // Экспорт выделенных строк
+          if (gridApiRef.current) {
+            const selectedRows = gridApiRef.current.getSelectedRows();
+            if (selectedRows.length === 0) {
+              toast.warning('Нет выделенных строк для экспорта');
+              return;
+            }
+            dataToExport = selectedRows;
+          } else {
+            toast.warning('Не удалось получить выделенные строки');
+            return;
+          }
+          break;
+
+        case 'all':
+        default:
+          // Экспорт всех строк
+          dataToExport = checks;
+          break;
+      }
+
+      await exportToExcel(dataToExport);
+
+      const typeLabels = {
+        visible: 'видимых',
+        selected: 'выделенных',
+        all: 'всех'
+      };
+      toast.success(`Экспорт ${typeLabels[type]} строк завершён (${dataToExport.length} шт.)`);
     } catch (error) {
       console.error('Ошибка экспорта:', error);
       toast.error('Ошибка при экспорте в Excel');
     }
   };
 
-  const handleImport = () => {
-    // TODO: Реализовать импорт
-    toast.info('Функция импорта в разработке');
+  const handleImport = async () => {
+    try {
+      // Создаем скрытый input для выбора файла
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.xlsx,.xls';
+
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+          toast.info('Импорт данных...');
+
+          // Парсим Excel файл
+          const importedChecks = await importFromExcel(file);
+
+          if (!importedChecks || importedChecks.length === 0) {
+            toast.warning('Файл не содержит данных для импорта');
+            return;
+          }
+
+          // Добавляем каждый чек через checksStore
+          let successCount = 0;
+          let errorCount = 0;
+
+          for (const check of importedChecks) {
+            try {
+              await addCheck(check, { skipToast: true });
+              successCount++;
+            } catch (error) {
+              console.error('Ошибка импорта чека:', check, error);
+              errorCount++;
+            }
+          }
+
+          // Обновляем список чеков
+          await loadChecks();
+
+          // Показываем результат
+          if (errorCount === 0) {
+            toast.success(`Импортировано ${successCount} чеков`);
+          } else {
+            toast.warning(`Импортировано ${successCount} чеков, ошибок: ${errorCount}`);
+          }
+        } catch (error) {
+          console.error('Ошибка импорта:', error);
+          toast.error('Ошибка при импорте файла');
+        }
+      };
+
+      input.click();
+    } catch (error) {
+      console.error('Ошибка открытия диалога:', error);
+      toast.error('Ошибка при выборе файла');
+    }
   };
 
   const handleAutoFitColumns = () => {
@@ -422,6 +519,7 @@ function MainAppShell({ resolvedTheme }) {
               onSelectionRangesChange={setSelectedRanges}
               onAutoFitColumns={autoFitColumnsRef}
               onResetWidths={resetWidthsRef}
+              onExportSelected={() => handleExport('selected')}
               gridApiRef={gridApiRef}
               resolvedTheme={resolvedTheme}
             />

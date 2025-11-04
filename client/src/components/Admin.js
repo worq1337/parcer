@@ -101,11 +101,12 @@ const Admin = ({ onClose }) => {
 
     const {updates} = window.electron;
 
-    updates.onUpdateStatus((status) => {
+    // Создаем именованные обработчики
+    const handleUpdateStatus = (status) => {
       setUpdateStatus(prev => ({ ...prev, checking: status.type === 'checking' }));
-    });
+    };
 
-    updates.onUpdateAvailable((info) => {
+    const handleUpdateAvailable = (info) => {
       setUpdateStatus(prev => ({
         ...prev,
         checking: false,
@@ -114,9 +115,9 @@ const Admin = ({ onClose }) => {
         error: null
       }));
       toast.info(`Доступна новая версия: ${info.version}`);
-    });
+    };
 
-    updates.onUpdateNotAvailable(() => {
+    const handleUpdateNotAvailable = () => {
       setUpdateStatus(prev => ({
         ...prev,
         checking: false,
@@ -124,9 +125,9 @@ const Admin = ({ onClose }) => {
         error: null
       }));
       toast.success('У вас установлена последняя версия');
-    });
+    };
 
-    updates.onUpdateError((error) => {
+    const handleUpdateError = (error) => {
       setUpdateStatus(prev => ({
         ...prev,
         checking: false,
@@ -134,16 +135,16 @@ const Admin = ({ onClose }) => {
         error: error.message
       }));
       toast.error(`Ошибка обновления: ${error.message}`);
-    });
+    };
 
-    updates.onDownloadProgress((progress) => {
+    const handleDownloadProgress = (progress) => {
       setUpdateStatus(prev => ({
         ...prev,
         progress
       }));
-    });
+    };
 
-    updates.onUpdateDownloaded((info) => {
+    const handleUpdateDownloaded = (info) => {
       setUpdateStatus(prev => ({
         ...prev,
         downloading: false,
@@ -151,11 +152,25 @@ const Admin = ({ onClose }) => {
         info
       }));
       toast.success('Обновление загружено! Перезапустите приложение для установки.');
-    });
+    };
 
+    // Подписываемся на события
+    updates.onUpdateStatus(handleUpdateStatus);
+    updates.onUpdateAvailable(handleUpdateAvailable);
+    updates.onUpdateNotAvailable(handleUpdateNotAvailable);
+    updates.onUpdateError(handleUpdateError);
+    updates.onDownloadProgress(handleDownloadProgress);
+    updates.onUpdateDownloaded(handleUpdateDownloaded);
+
+    // Отписываемся при размонтировании - удаляем только наши обработчики
     return () => {
-      if (updates.removeAllListeners) {
-        updates.removeAllListeners();
+      if (updates.removeListener) {
+        updates.removeListener('update-status', handleUpdateStatus);
+        updates.removeListener('update-available', handleUpdateAvailable);
+        updates.removeListener('update-not-available', handleUpdateNotAvailable);
+        updates.removeListener('update-error', handleUpdateError);
+        updates.removeListener('update-download-progress', handleDownloadProgress);
+        updates.removeListener('update-downloaded', handleUpdateDownloaded);
       }
     };
   }, []);

@@ -1,0 +1,179 @@
+/**
+ * Bulk Actions Bar Styles
+ * Панель массовых действий с операторами
+ */
+
+.bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--color-accent-primary, #1976d2);
+  color: var(--color-text-inverse, #ffffff);
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-md, 0 4px 8px rgba(0, 0, 0, 0.1));
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bulk-actions-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bulk-count {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.bulk-clear {
+  color: var(--color-text-inverse, #ffffff);
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
+}
+
+.bulk-clear:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bulk-actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bulk-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Dropdown container */
+.bulk-action-dropdown {
+  position: relative;
+}
+
+.bulk-action-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 200px;
+  background: var(--menu-bg, #ffffff);
+  border: 1px solid var(--menu-border, #e0e0e0);
+  border-radius: var(--radius-md, 6px);
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, 0.15));
+  z-index: 1000;
+  overflow: hidden;
+  animation: menuFadeIn 0.15s ease-out;
+}
+
+@keyframes menuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bulk-action-menu-header {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary, #999999);
+  border-bottom: 1px solid var(--menu-border, #e0e0e0);
+  background: var(--color-bg-secondary, #f5f5f5);
+}
+
+.bulk-action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: var(--menu-color, #111827);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.bulk-action-menu-item:hover {
+  background: var(--menu-hover-bg, #f5f5f5);
+}
+
+.bulk-action-menu-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--color-text-tertiary, #999999);
+}
+
+/* Dark theme */
+[data-theme="dark"] .bulk-actions-bar {
+  background: var(--color-accent-primary, #1976d2);
+}
+
+[data-theme="dark"] .bulk-action-menu {
+  background: var(--menu-bg, #2c2c2c);
+  border-color: var(--menu-border, #444444);
+}
+
+[data-theme="dark"] .bulk-action-menu-header {
+  background: var(--color-bg-secondary, #1e1e1e);
+}
+
+[data-theme="dark"] .bulk-action-menu-item {
+  color: var(--menu-color, #e0e0e0);
+}
+
+[data-theme="dark"] .bulk-action-menu-item:hover {
+  background: var(--menu-hover-bg, #3a3a3a);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .bulk-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .bulk-actions-info {
+    justify-content: space-between;
+  }
+
+  .bulk-actions-buttons {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  .bulk-action-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}

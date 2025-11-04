@@ -32,6 +32,9 @@ export const useOperatorsStore = create(
       groupByApp: true, // включить группировку
       expandedApps: {}, // { [appName]: boolean } - развёрнутые группы
 
+      // Bulk-выбор операторов
+      selectedOperatorIds: [], // массив id выбранных операторов
+
       /**
        * Загрузить операторов с сервера
        */
@@ -446,6 +449,117 @@ export const useOperatorsStore = create(
         link.download = `operators-dictionary-${new Date().toISOString().split('T')[0]}.json`;
         link.click();
         URL.revokeObjectURL(url);
+      },
+
+      /**
+       * Bulk-операции с операторами
+       */
+      toggleOperatorSelection: (operatorId) => {
+        const { selectedOperatorIds } = get();
+        const isSelected = selectedOperatorIds.includes(operatorId);
+
+        set({
+          selectedOperatorIds: isSelected
+            ? selectedOperatorIds.filter(id => id !== operatorId)
+            : [...selectedOperatorIds, operatorId],
+        });
+      },
+
+      selectAllOperators: () => {
+        const { operators } = get();
+        set({ selectedOperatorIds: operators.map(op => op.id) });
+      },
+
+      clearOperatorSelection: () => {
+        set({ selectedOperatorIds: [] });
+      },
+
+      bulkUpdateAppName: async (appName) => {
+        const { operators, selectedOperatorIds } = get();
+
+        try {
+          // Обновляем каждого выбранного оператора
+          const updatePromises = selectedOperatorIds.map(async (id) => {
+            const operator = operators.find(op => op.id === id);
+            if (!operator) return null;
+
+            return await operatorsAPI.update(id, {
+              canonicalName: operator.canonicalName,
+              appName: appName,
+              isP2p: operator.isP2P,
+              synonyms: operator.synonyms || [],
+            });
+          });
+
+          await Promise.all(updatePromises);
+
+          // Обновляем локальное состояние
+          const updatedOperators = operators.map(op =>
+            selectedOperatorIds.includes(op.id)
+              ? { ...op, appName, updatedAt: new Date().toISOString() }
+              : op
+          );
+
+          set({ operators: updatedOperators, selectedOperatorIds: [] });
+          return { success: true, count: selectedOperatorIds.length };
+        } catch (error) {
+          console.error('Error bulk updating app name:', error);
+          return { success: false, error: error.message };
+        }
+      },
+
+      bulkUpdateP2P: async (isP2P) => {
+        const { operators, selectedOperatorIds } = get();
+
+        try {
+          const updatePromises = selectedOperatorIds.map(async (id) => {
+            const operator = operators.find(op => op.id === id);
+            if (!operator) return null;
+
+            return await operatorsAPI.update(id, {
+              canonicalName: operator.canonicalName,
+              appName: operator.appName,
+              isP2p: isP2P,
+              synonyms: operator.synonyms || [],
+            });
+          });
+
+          await Promise.all(updatePromises);
+
+          const updatedOperators = operators.map(op =>
+            selectedOperatorIds.includes(op.id)
+              ? { ...op, isP2P, updatedAt: new Date().toISOString() }
+              : op
+          );
+
+          set({ operators: updatedOperators, selectedOperatorIds: [] });
+          return { success: true, count: selectedOperatorIds.length };
+        } catch (error) {
+          console.error('Error bulk updating P2P:', error);
+          return { success: false, error: error.message };
+        }
+      },
+
+      bulkDeleteOperators: async () => {
+        const { operators, selectedOperatorIds } = get();
+
+        try {
+          const deletePromises = selectedOperatorIds.map(id =>
+            operatorsAPI.delete(id)
+          );
+
+          await Promise.all(deletePromises);
+
+          const updatedOperators = operators.filter(
+            op => !selectedOperatorIds.includes(op.id)
+          );
+
+          set({ operators: updatedOperators, selectedOperatorIds: [] });
+          return { success: true, count: selectedOperatorIds.length };
+        } catch (error) {
+          console.error('Error bulk deleting operators:', error);
+          return { success: false, error: error.message };
+        }
       },
 
       importDictionary: (fileOrData) => {

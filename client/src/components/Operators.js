@@ -5,6 +5,7 @@ import Icon from './icons/Icon';
 import HighlightedText from './common/HighlightedText';
 import StatusIndicator from './common/StatusIndicator';
 import ImportPreviewModal from './modals/ImportPreviewModal';
+import BulkActionsBar from './common/BulkActionsBar';
 import '../styles/Operators.css';
 
 /**
@@ -34,6 +35,7 @@ const Operators = ({ onClose }) => {
     getP2PStats,
     getOperatorStatus,
     selectedOperator,
+    selectedOperatorIds,
     editMode,
     searchQuery,
     filterByApp,
@@ -59,6 +61,12 @@ const Operators = ({ onClose }) => {
     removeSynonym,
     exportDictionary,
     importDictionary,
+    toggleOperatorSelection,
+    selectAllOperators,
+    clearOperatorSelection,
+    bulkUpdateAppName,
+    bulkUpdateP2P,
+    bulkDeleteOperators,
   } = useOperatorsStore();
 
   // Загрузить операторов с сервера при монтировании компонента
@@ -285,6 +293,34 @@ const Operators = ({ onClose }) => {
     setImportPreviewFile(null);
   };
 
+  // === Bulk-операции ===
+  const handleBulkUpdateApp = async (appName) => {
+    const result = await bulkUpdateAppName(appName);
+    if (result.success) {
+      toast.success(`Обновлено приложение для ${result.count} оператор(ов)`);
+    } else {
+      toast.error(`Ошибка обновления: ${result.error}`);
+    }
+  };
+
+  const handleBulkUpdateP2P = async (isP2P) => {
+    const result = await bulkUpdateP2P(isP2P);
+    if (result.success) {
+      toast.success(`Обновлён P2P статус для ${result.count} оператор(ов)`);
+    } else {
+      toast.error(`Ошибка обновления: ${result.error}`);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const result = await bulkDeleteOperators();
+    if (result.success) {
+      toast.success(`Удалено ${result.count} оператор(ов)`);
+    } else {
+      toast.error(`Ошибка удаления: ${result.error}`);
+    }
+  };
+
   return (
     <div className="operators-container">
       {/* Заголовок */}
@@ -429,6 +465,18 @@ const Operators = ({ onClose }) => {
             )}
           </div>
 
+          {/* Bulk Actions Bar */}
+          {selectedOperatorIds.length > 0 && (
+            <BulkActionsBar
+              selectedCount={selectedOperatorIds.length}
+              onClearSelection={clearOperatorSelection}
+              onBulkUpdateApp={handleBulkUpdateApp}
+              onBulkUpdateP2P={handleBulkUpdateP2P}
+              onBulkDelete={handleBulkDelete}
+              uniqueApps={uniqueApps}
+            />
+          )}
+
           {/* Таблица операторов или Accordion с группировкой */}
           <div className="operators-table-container">
             {!groupByApp ? (
@@ -436,6 +484,23 @@ const Operators = ({ onClose }) => {
               <table className="operators-table">
                 <thead>
                   <tr>
+                    <th className="text-center" style={{ width: '40px' }}>
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredOperators.length > 0 &&
+                          filteredOperators.every(op => selectedOperatorIds.includes(op.id))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            selectAllOperators(filteredOperators.map(op => op.id));
+                          } else {
+                            clearOperatorSelection();
+                          }
+                        }}
+                        title="Выбрать все"
+                      />
+                    </th>
                     <th className="text-center" style={{ width: '40px' }}>
                       <Icon name="info" size={16} title="Статус сопоставления" />
                     </th>
@@ -449,7 +514,7 @@ const Operators = ({ onClose }) => {
                 <tbody>
                   {filteredOperators.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="text-center text-muted">
+                      <td colSpan="7" className="text-center text-muted">
                         Операторы не найдены
                       </td>
                     </tr>
@@ -460,23 +525,29 @@ const Operators = ({ onClose }) => {
                         className={
                           selectedOperator?.id === operator.id ? 'selected' : ''
                         }
-                        onClick={() => selectOperator(operator)}
                       >
-                        <td className="text-center">
+                        <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedOperatorIds.includes(operator.id)}
+                            onChange={() => toggleOperatorSelection(operator.id)}
+                          />
+                        </td>
+                        <td className="text-center" onClick={() => selectOperator(operator)}>
                           <StatusIndicator status={getOperatorStatus(operator)} />
                         </td>
-                        <td className="font-medium">
+                        <td className="font-medium" onClick={() => selectOperator(operator)}>
                           <HighlightedText text={operator.canonicalName} searchQuery={searchQuery} />
                         </td>
-                        <td>{operator.appName}</td>
-                        <td className="text-center">
+                        <td onClick={() => selectOperator(operator)}>{operator.appName}</td>
+                        <td className="text-center" onClick={() => selectOperator(operator)}>
                           {operator.isP2P ? (
                             <span className="badge badge-p2p">P2P</span>
                           ) : (
                             <span className="badge badge-regular">—</span>
                           )}
                         </td>
-                        <td>
+                        <td onClick={() => selectOperator(operator)}>
                           <div className="synonyms-chips">
                             {operator.synonyms.slice(0, 3).map((syn) => (
                               <span key={syn} className="chip">
@@ -557,11 +628,20 @@ const Operators = ({ onClose }) => {
                                   className={`operator-card ${
                                     selectedOperator?.id === operator.id ? 'selected' : ''
                                   }`}
-                                  onClick={() => selectOperator(operator)}
                                 >
                                   <div className="operator-card-header">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedOperatorIds.includes(operator.id)}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        toggleOperatorSelection(operator.id);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{ marginRight: '8px' }}
+                                    />
                                     <StatusIndicator status={getOperatorStatus(operator)} />
-                                    <span className="operator-name">
+                                    <span className="operator-name" onClick={() => selectOperator(operator)}>
                                       <HighlightedText text={operator.canonicalName} searchQuery={searchQuery} />
                                     </span>
                                     {operator.isP2P && (

@@ -98,6 +98,10 @@
   border: 1px solid var(--color-border-primary);
 }
 
+.system-card-wide {
+  grid-column: 1 / -1;
+}
+
 .system-card-header {
   display: flex;
   align-items: center;
@@ -150,6 +154,81 @@
   display: flex;
   gap: 12px;
   justify-content: center;
+}
+
+.duplicates-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.duplicates-preview {
+  margin-top: 12px;
+  border: 1px dashed var(--color-border-primary);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--color-bg-tertiary);
+}
+
+.duplicates-table-wrapper {
+  overflow: auto;
+}
+
+.duplicates-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.duplicates-table th,
+.duplicates-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border-primary);
+  text-align: left;
+}
+
+.duplicates-table th {
+  background: var(--color-bg-secondary);
+  position: sticky;
+  top: 0;
+}
+
+.duplicates-empty {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--color-text-secondary);
+}
+
+.duplicates-meta {
+  margin-bottom: 8px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.mono {
+  font-family: 'Courier New', monospace;
+}
+
+.btn-danger {
+  background-color: var(--status-error);
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hint-text {
+  color: var(--color-text-secondary);
+  font-size: 12px;
 }
 
 /* Статусные бейджи */

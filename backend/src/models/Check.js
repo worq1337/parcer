@@ -567,6 +567,122 @@ class Check {
   }
 
   /**
+   * Найти потенциальные дубликаты по fingerprint.
+   * Возвращает все записи, кроме первой в группе (rn > 1).
+   */
+  static async getDuplicatesPreview(limit = 300) {
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 2000) : 300;
+
+    const query = `
+      WITH ranked AS (
+        SELECT
+          id,
+          check_id,
+          datetime,
+          amount,
+          currency,
+          operator,
+          card_last4,
+          fingerprint,
+          MIN(id) OVER (PARTITION BY fingerprint) AS original_id,
+          ROW_NUMBER() OVER (PARTITION BY fingerprint ORDER BY datetime ASC, id ASC) AS rn,
+          COUNT(*) OVER (PARTITION BY fingerprint) AS cnt
+        FROM checks
+        WHERE fingerprint IS NOT NULL
+      )
+      SELECT
+        id,
+        check_id,
+        datetime,
+        amount,
+        currency,
+        operator,
+        card_last4,
+        fingerprint,
+        original_id,
+        cnt AS duplicates_in_group,
+        rn,
+        COUNT(*) OVER () AS total_duplicates
+      FROM ranked
+      WHERE cnt > 1 AND rn > 1
+      ORDER BY fingerprint, rn
+      LIMIT $1
+    `;
+
+    const result = await pool.query(query, [safeLimit]);
+    const rows = result.rows || [];
+    const total = rows.length > 0 ? Number(rows[0].total_duplicates) || rows.length : 0;
+
+    return { rows, total };
+  }
+
+  /**
+   * Очистить дубликаты (оставляя по одному экземпляру с наименьшей датой/ID).
+   */
+  static async cleanDuplicates() {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const victimsQuery = `
+        WITH ranked AS (
+          SELECT
+            id,
+            check_id,
+            fingerprint,
+            MIN(id) OVER (PARTITION BY fingerprint) AS original_id,
+            ROW_NUMBER() OVER (PARTITION BY fingerprint ORDER BY datetime ASC, id ASC) AS rn,
+            COUNT(*) OVER (PARTITION BY fingerprint) AS cnt
+          FROM checks
+          WHERE fingerprint IS NOT NULL
+        )
+        SELECT id, check_id, fingerprint, original_id
+        FROM ranked
+        WHERE cnt > 1 AND rn > 1
+      `;
+
+      const victimsResult = await client.query(victimsQuery);
+      const victims = victimsResult.rows || [];
+      if (victims.length === 0) {
+        await client.query('ROLLBACK');
+        return { deleted: 0, groupsAffected: 0, sample: [] };
+      }
+
+      const victimIds = victims
+        .map((v) => Number(v.id))
+        .filter((id) => Number.isFinite(id));
+
+      if (victimIds.length === 0) {
+        await client.query('ROLLBACK');
+        return { deleted: 0, groupsAffected: 0, sample: [] };
+      }
+
+      const deleteQuery = `
+        DELETE FROM checks
+        WHERE id = ANY($1::int[])
+        RETURNING id, check_id, fingerprint, datetime, amount, currency, operator, card_last4
+      `;
+
+      const deletedResult = await client.query(deleteQuery, [victimIds]);
+      await client.query('COMMIT');
+
+      const deletedRows = deletedResult.rows || [];
+      const groups = new Set(victims.map((v) => v.fingerprint || 'no-fingerprint'));
+
+      return {
+        deleted: deletedRows.length,
+        groupsAffected: groups.size,
+        sample: deletedRows.slice(0, 20),
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Массовое создание чеков (для импорта)
    */
   static async bulkCreate(checksData) {

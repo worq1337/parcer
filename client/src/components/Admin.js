@@ -36,6 +36,10 @@ const Admin = ({ onClose }) => {
   const [backups, setBackups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [realtimeEnabled, setRealtimeEnabled] = useState(false); // patch-016 §7: Переключатель real-time
+  const [duplicatesPreview, setDuplicatesPreview] = useState([]);
+  const [duplicatesTotal, setDuplicatesTotal] = useState(0);
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false);
+  const [duplicatesCleaning, setDuplicatesCleaning] = useState(false);
 
   // patch-023: Update checker state
   const [updateStatus, setUpdateStatus] = useState({
@@ -365,6 +369,74 @@ const Admin = ({ onClose }) => {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
+  const formatDateTime = (value) => {
+    if (!value) return '';
+    try {
+      const date = new Date(value);
+      return date.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return String(value);
+    }
+  };
+
+  const loadDuplicatesPreview = async () => {
+    setDuplicatesLoading(true);
+    try {
+      const data = await adminAPI.getDuplicates();
+      if (data.success) {
+        const totalFromApi = data.total || (data.duplicates?.[0]?.total_duplicates ?? 0);
+        setDuplicatesPreview(data.duplicates || []);
+        setDuplicatesTotal(totalFromApi);
+        toast.info(`Найдено дубликатов: ${totalFromApi}`);
+      } else {
+        throw new Error(data.error || 'Не удалось получить дубликаты');
+      }
+    } catch (error) {
+      console.error('Error loading duplicates:', error);
+      showToastThrottled('duplicates-load-error', 'Ошибка загрузки дубликатов', 'error');
+      setDuplicatesPreview([]);
+      setDuplicatesTotal(0);
+    } finally {
+      setDuplicatesLoading(false);
+    }
+  };
+
+  const handleCleanDuplicates = async () => {
+    if (duplicatesCleaning) return;
+    const total = duplicatesTotal || duplicatesPreview.length;
+    if (!total) {
+      toast.info('Дубликаты не найдены');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Очистить дубликаты? Будут удалены копии, оставляя по одному экземпляру. Найдено: ${total}.`
+    );
+    if (!confirmed) return;
+
+    setDuplicatesCleaning(true);
+    try {
+      const data = await adminAPI.cleanDuplicates();
+      if (data.success) {
+        toast.success(`Удалено дубликатов: ${data.deleted || 0}`);
+        await loadDuplicatesPreview();
+      } else {
+        throw new Error(data.error || 'Не удалось очистить дубликаты');
+      }
+    } catch (error) {
+      console.error('Error cleaning duplicates:', error);
+      showToastThrottled('duplicates-clean-error', 'Ошибка очистки дубликатов', 'error');
+    } finally {
+      setDuplicatesCleaning(false);
+    }
+  };
+
   // Загрузка данных при смене вкладки
   useEffect(() => {
     switch (activeTab) {
@@ -398,6 +470,11 @@ const Admin = ({ onClose }) => {
       <span className={`status-badge status-${info.color}`}>{info.text}</span>
     );
   };
+
+  const dedupTotal = duplicatesTotal || (duplicatesPreview?.length ?? 0);
+  const duplicatesPreviewRows = Array.isArray(duplicatesPreview)
+    ? duplicatesPreview.slice(0, 15)
+    : [];
 
   return (
     <div className="admin-container">
@@ -616,6 +693,86 @@ const Admin = ({ onClose }) => {
                 <Icon name="file" size={18} />
                 <span>Показать логи</span>
               </button>
+            </div>
+
+            {/* Очистка дубликатов */}
+            <div className="system-card system-card-wide">
+              <div className="system-card-header">
+                <Icon name="warning" size={20} />
+                <h3>Очистка дубликатов</h3>
+              </div>
+              <div className="system-card-body">
+                <div className="system-stat">
+                  <span className="stat-label">Найдено дубликатов:</span>
+                  <span className="stat-number">{dedupTotal}</span>
+                </div>
+
+                <div className="duplicates-actions">
+                  <button
+                    className="btn-primary"
+                    onClick={loadDuplicatesPreview}
+                    disabled={duplicatesLoading}
+                  >
+                    {duplicatesLoading ? 'Поиск...' : 'Найти дубликаты'}
+                  </button>
+                  <button
+                    className="btn-danger"
+                    onClick={handleCleanDuplicates}
+                    disabled={duplicatesCleaning || dedupTotal === 0}
+                  >
+                    {duplicatesCleaning ? 'Очистка...' : 'Очистить дубликаты'}
+                  </button>
+                  <span className="hint-text">
+                    Дубликаты ищутся по fingerprint; остаётся по одному экземпляру.
+                  </span>
+                </div>
+
+                <div className="duplicates-preview">
+                  {duplicatesLoading ? (
+                    <div className="duplicates-empty">
+                      <Icon name="refresh" size={18} />
+                      <span>Поиск дубликатов...</span>
+                    </div>
+                  ) : dedupTotal === 0 ? (
+                    <div className="duplicates-empty">
+                      <Icon name="check" size={20} />
+                      <span>Дубликатов не найдено</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="duplicates-meta">
+                        <span>Предпросмотр (первые {duplicatesPreviewRows.length} из {dedupTotal})</span>
+                      </div>
+                      <div className="duplicates-table-wrapper">
+                        <table className="duplicates-table">
+                          <thead>
+                            <tr>
+                              <th>Оригинал</th>
+                              <th>Дубликат</th>
+                              <th>Сумма</th>
+                              <th>Карта</th>
+                              <th>Оператор</th>
+                              <th>Дата/время</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {duplicatesPreviewRows.map((row) => (
+                              <tr key={row.id}>
+                                <td className="mono">{row.original_id || '—'}</td>
+                                <td className="mono">{row.id}</td>
+                                <td>{row.amount} {row.currency}</td>
+                                <td className="mono">*{row.card_last4}</td>
+                                <td>{row.operator}</td>
+                                <td>{formatDateTime(row.datetime)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}

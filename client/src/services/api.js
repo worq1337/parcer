@@ -195,6 +195,18 @@ export const adminAPI = {
   clearChecks: async () => {
     const response = await api.post('/admin/clear-checks', {});
     return response.data;
+  },
+
+  // Найти дубликаты чеков (предпросмотр)
+  getDuplicates: async (limit = 300) => {
+    const response = await api.get('/admin/duplicates', { params: { limit } });
+    return response.data;
+  },
+
+  // Очистить дубликаты чеков (оставляя по одному экземпляру)
+  cleanDuplicates: async () => {
+    const response = await api.post('/admin/duplicates/clean', {});
+    return response.data;
   }
 };
 

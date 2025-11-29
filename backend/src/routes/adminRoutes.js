@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const QueueEvent = require('../models/QueueEvent');
 const Backup = require('../models/Backup');
+const Check = require('../models/Check');
 const { exec, spawn } = require('child_process');
 const util = require('util');
 const fs = require('fs').promises;
@@ -156,6 +157,50 @@ router.delete('/queue/cleanup', async (req, res) => {
     });
   } catch (error) {
     console.error('Error cleaning up queue events:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /admin/duplicates
+ * Предпросмотр дубликатов чеков (по fingerprint)
+ */
+router.get('/duplicates', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 300;
+    const { rows, total } = await Check.getDuplicatesPreview(limit);
+    res.json({
+      success: true,
+      total,
+      duplicates: rows,
+      limit
+    });
+  } catch (error) {
+    console.error('Error getting duplicates preview:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /admin/duplicates/clean
+ * Удалить дубликаты (оставляя один экземпляр)
+ */
+router.post('/duplicates/clean', async (req, res) => {
+  try {
+    const result = await Check.cleanDuplicates();
+    res.json({
+      success: true,
+      ...result,
+      message: `Удалено дубликатов: ${result.deleted}`
+    });
+  } catch (error) {
+    console.error('Error cleaning duplicates:', error);
     res.status(500).json({
       success: false,
       error: error.message

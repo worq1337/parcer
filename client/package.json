@@ -1,6 +1,6 @@
 {
   "name": "receipt-parser-client",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Desktop приложение для парсера банковских чеков",
   "homepage": ".",
   "author": "",
@@ -68,7 +68,7 @@
   },
   "build": {
     "appId": "com.receiptparser.app",
-    "productName": "Receipt Parser",
+    "productName": "ReceiptParser",
     "extends": null,
     "files": [
       "build/**/*",

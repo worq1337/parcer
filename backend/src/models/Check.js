@@ -4,6 +4,11 @@ const { resolveDateParts } = require('../utils/datetime');
 const { normalizeCardLast4 } = require('../utils/card');
 const { computeFingerprint } = require('../utils/fingerprint');
 
+const DEDUP_WINDOW_SECONDS = (() => {
+  const raw = parseInt(process.env.DEDUP_WINDOW_SECONDS || '300', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 60;
+})();
+
 class Check {
   /**
    * Получить все чеки с возможностью фильтрации
@@ -60,6 +65,12 @@ class Check {
     if (filters.isP2p !== undefined) {
       subQuery += ` AND is_p2p = $${paramIndex}`;
       params.push(filters.isP2p);
+      paramIndex++;
+    }
+
+    if (filters.updatedAfter) {
+      subQuery += ` AND updated_at >= $${paramIndex}`;
+      params.push(filters.updatedAfter);
       paramIndex++;
     }
 
@@ -521,18 +532,19 @@ class Check {
     if (!Number.isFinite(normalizedAmount)) {
       return null;
     }
+    const dedupWindow = DEDUP_WINDOW_SECONDS;
 
     const query = `
       SELECT * FROM checks
       WHERE card_last4 = $1
-      AND datetime BETWEEN ($2::timestamp - INTERVAL '60 seconds') AND ($2::timestamp + INTERVAL '60 seconds')
+      AND datetime BETWEEN ($2::timestamp - ($4 * INTERVAL '1 second')) AND ($2::timestamp + ($4 * INTERVAL '1 second'))
       AND ABS(amount) = ABS($3)
       AND is_duplicate = false
       LIMIT 1
     `;
     const result = await pool.query(
       query,
-      [normalizedCard, normalizedDate, normalizedAmount]
+      [normalizedCard, normalizedDate, normalizedAmount, dedupWindow]
     );
     return result.rows[0];
   }

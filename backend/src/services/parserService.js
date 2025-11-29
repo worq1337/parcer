@@ -15,6 +15,8 @@ const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-4o';
 const MAX_ATTEMPTS = 3;
 const BACKOFF_BASE_MS = 400;
 
+const DECLINE_PATTERN = /(declined|decline|отказ|отклонен|отклонена|отклонено|отмен[аеи]|cancelled|canceled|failed|insufficient\s+funds|not\s+enough\s+funds|недостаточно\s+средств|операция\s+не\s+выполнена|неуспешн)/i;
+
 const stripCodeFences = (value) =>
   value
     .replace(/```json/gi, '')
@@ -52,6 +54,13 @@ function parseAmount(raw) {
 
   const value = Number(normalized);
   return Number.isFinite(value) ? value : null;
+}
+
+function isDeclinedText(text) {
+  if (!text || typeof text !== 'string') {
+    return false;
+  }
+  return DECLINE_PATTERN.test(text.toLowerCase());
 }
 
 function safeParseJson(raw) {
@@ -333,6 +342,12 @@ class ParserService {
       throw new ParserError('NO_TEXT', 'Сообщение пустое', { requestId: context.requestId });
     }
 
+    if (isDeclinedText(rawText)) {
+      throw new ParserError('DECLINED', 'Операция отклонена или не выполнена', {
+        requestId: context.requestId
+      });
+    }
+
     const fastResult = await this.tryFastPath(rawText, context);
     if (fastResult && fastResult.length > 0) {
       return fastResult;
@@ -493,12 +508,23 @@ class ParserService {
 
   async postProcessData(parsedData, rawText, source, options = {}) {
     const dateParts = resolveDateParts(parsedData.datetime);
-    const amountAbsolute = Math.abs(Number(parsedData.amount) || 0);
-
-    let amount = amountAbsolute;
-    if (parsedData.isIncome === false) {
-      amount = -amountAbsolute;
+    const rawAmount = Number(parsedData.amount);
+    if (!Number.isFinite(rawAmount)) {
+      throw new ParserError('AMOUNT_INVALID', 'Некорректная сумма после нормализации', {
+        requestId: options.requestId
+      });
     }
+
+    let isIncome = parsedData.isIncome;
+    if (isIncome === undefined || isIncome === null) {
+      isIncome = rawAmount >= 0;
+    }
+    // Если в тексте был минус, принудительно считаем расходом
+    if (rawAmount < 0 && isIncome) {
+      isIncome = false;
+    }
+
+    const amount = isIncome ? Math.abs(rawAmount) : -Math.abs(rawAmount);
 
     const balanceCandidate =
       parsedData.balance === undefined || parsedData.balance === null

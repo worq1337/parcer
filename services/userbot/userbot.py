@@ -8,7 +8,7 @@ import os
 import asyncio
 import requests
 import psycopg2
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from telethon import TelegramClient, events
 from telethon.tl.types import User, PeerChannel, PeerChat, PeerUser, Channel, Chat
 from telethon.tl.types import InputPeerUser, InputPeerChannel, InputPeerChat
@@ -38,6 +38,9 @@ class UserbotManager:
 
         # Подключение к БД
         self.db_conn = None
+
+        # Максимальный возраст сообщения, которое мы считаем «новым» (в минутах)
+        self.max_message_age = int(os.getenv('USERBOT_MAX_MESSAGE_AGE_MINUTES', '30'))
 
     async def initialize(self):
         """
@@ -257,9 +260,10 @@ class UserbotManager:
                 'error': str(e)
             }
 
-    def save_message_to_db(self, bot_id, telegram_message_id, text):
+    def save_message_to_db(self, bot_id, telegram_message_id, text, message_date=None):
         """
         Сохранить сообщение в БД
+        Возвращает True если была вставка, False если запись уже существовала
         """
         try:
             # Подключение к БД (получаем из переменных окружения)
@@ -285,19 +289,26 @@ class UserbotManager:
                     str(telegram_message_id),
                     str(bot_id),
                     str(telegram_message_id),
-                    datetime.now(),
+                    message_date or datetime.now(timezone.utc),
                     text
                 )
             )
 
+            inserted = cursor.rowcount > 0
             self.db_conn.commit()
             cursor.close()
-            print(f"💾 Сообщение сохранено в БД (bot_id={bot_id})")
+
+            if inserted:
+                print(f"💾 Сообщение сохранено в БД (bot_id={bot_id})")
+            else:
+                print(f"ℹ️ Сообщение уже было в БД, пропускаем вставку (bot_id={bot_id})")
+            return inserted
 
         except Exception as db_error:
             print(f"❌ Ошибка сохранения в БД: {db_error}")
             if self.db_conn:
                 self.db_conn.rollback()
+            return False
 
     async def handle_new_message(self, event):
         """
@@ -329,8 +340,19 @@ class UserbotManager:
 
                 print(f"📝 Текст сообщения (первые 100 символов): {message_text[:100]}")
 
-                # Сохраняем сообщение в БД для чата
-                self.save_message_to_db(sender.id, event.message.id, message_text)
+                # Проверяем «устаревшие» сообщения (например, при отложенной доставке)
+                msg_dt = getattr(event.message, 'date', None)
+                msg_dt = msg_dt if isinstance(msg_dt, datetime) else datetime.now(timezone.utc)
+                now_ts = datetime.now(timezone.utc)
+                if msg_dt.tzinfo is None:
+                    msg_dt = msg_dt.replace(tzinfo=timezone.utc)
+                age_seconds = (now_ts - msg_dt).total_seconds()
+                if age_seconds > self.max_message_age * 60:
+                    print(f"⏩ Сообщение слишком старое ({int(age_seconds/60)} мин), пропускаем автообработку")
+                    return
+
+                # Сохраняем сообщение в БД для чата (и узнаём, было ли оно новым)
+                inserted = self.save_message_to_db(sender.id, event.message.id, message_text, msg_dt)
 
                 payload = {
                     'chat_id': str(sender.id),
@@ -338,18 +360,22 @@ class UserbotManager:
                     'raw_text': message_text
                 }
 
-                async def _auto_process():
-                    try:
-                        await asyncio.to_thread(
-                            requests.post,
-                            f"{BACKEND_BASE}/api/userbot-chat/process",
-                            json=payload,
-                            timeout=5
-                        )
-                    except Exception as push_error:
-                        print(f"[userbot] auto process failed: {push_error}")
+                # Автообработку запускаем только если запись действительно новая
+                if inserted:
+                    async def _auto_process():
+                        try:
+                            await asyncio.to_thread(
+                                requests.post,
+                                f"{BACKEND_BASE}/api/userbot-chat/process",
+                                json=payload,
+                                timeout=5
+                            )
+                        except Exception as push_error:
+                            print(f"[userbot] auto process failed: {push_error}")
 
-                asyncio.create_task(_auto_process())
+                    asyncio.create_task(_auto_process())
+                else:
+                    print("ℹ️ Автообработка не запущена: сообщение уже существовало")
 
                 # Пересылаем сообщение в наш бот
                 try:

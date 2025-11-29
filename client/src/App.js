@@ -62,7 +62,7 @@ function MainAppShell({ resolvedTheme }) {
   const formulaBarRef = useRef(null); // patch-013
 
   useEffect(() => {
-    loadChecks();
+    loadChecks({ silent: true });
   }, [loadChecks]);
 
   // patch-017 §5: Инициализация notification service
@@ -119,7 +119,7 @@ function MainAppShell({ resolvedTheme }) {
   } = useAutoUpdater();
 
   const handleRefresh = () => {
-    loadChecks();
+    loadChecks({ silent: true, forceFullRefresh: true });
     toast.success('Данные обновлены');
   };
 
@@ -291,7 +291,7 @@ function MainAppShell({ resolvedTheme }) {
           }
 
           // Обновляем список чеков
-          await loadChecks();
+          await loadChecks({ silent: true, forceFullRefresh: true });
 
           // Показываем результат
           if (errorCount === 0) {

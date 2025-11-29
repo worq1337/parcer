@@ -21,8 +21,8 @@ const ChecksTable = ({ refreshTrigger, onCheckDetails, onRefresh }) => {
   const loadChecks = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await checksAPI.getAll();
-      setChecks(response.data || []);
+      const payload = await checksAPI.getAll();
+      setChecks(payload?.data || payload || []);
     } catch (error) {
       console.error('Ошибка загрузки чеков:', error);
       toast.error('Не удалось загрузить чеки');

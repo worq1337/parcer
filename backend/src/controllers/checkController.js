@@ -15,7 +15,8 @@ class CheckController {
         transactionType: req.query.transactionType,
         operator: req.query.operator,
         app: req.query.app,
-        isP2p: req.query.isP2p
+        isP2p: req.query.isP2p,
+        updatedAfter: req.query.updated_after || req.query.updatedAfter,
       };
 
       const checks = await Check.getAll(filters);

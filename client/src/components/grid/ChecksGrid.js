@@ -3339,9 +3339,19 @@ const ChecksGrid = ({
     return classes.join(' ');
   }, [cellDensity, cellSelectionState.isSelecting, resolvedTheme]);
 
+  const hasRows = Array.isArray(filteredChecks) && filteredChecks.length > 0;
+  const showBlockingLoader = loading && !hasRows;
+
   return (
     <div className={containerClassName}>
-      {loading ? (
+      {loading && hasRows && (
+        <div className="grid-sync-indicator">
+          <div className="spinner spinner--inline"></div>
+          <span>Обновляем данные…</span>
+        </div>
+      )}
+
+      {showBlockingLoader ? (
         <div className="loading-overlay">
           <div className="spinner"></div>
           <p>Загрузка данных...</p>

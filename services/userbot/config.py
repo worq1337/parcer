@@ -16,9 +16,9 @@ API_HASH = os.getenv('TELEGRAM_API_HASH', '')
 # Боты для мониторинга (ID ботов, от которых нужно пересылать сообщения)
 # Названия будут автоматически получены из Telegram API
 MONITOR_BOT_IDS = [
-    915326936,   # @uzumbank_bot
-    856264490,   # @paymeuz_bot
-    7028509569   # @click_store_bot
+    915326936,   # @CardXabarBot / uzumbank_bot
+    856254490,   # резервный/старый бот из UI списка
+    7028509569   # @NBUCard_bot / click_store_bot
 ]
 
 # Наш бот, в который пересылаем сообщения

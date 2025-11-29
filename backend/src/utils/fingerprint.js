@@ -2,6 +2,12 @@ const crypto = require('crypto');
 const { parseToTashkentDateTime } = require('./datetime');
 const { normalizeCardLast4 } = require('./card');
 
+// Расширяем окно дедупликации до 5 минут (по умолчанию), настраивается через DEDUP_WINDOW_SECONDS
+const FINGERPRINT_WINDOW_SECONDS = (() => {
+  const raw = parseInt(process.env.DEDUP_WINDOW_SECONDS || '300', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 60;
+})();
+
 function normalizeOperator(value) {
   if (!value) {
     return '';
@@ -26,7 +32,7 @@ function normalizeAmount(value) {
 
 /**
  * Build deterministic fingerprint hash for a transaction.
- * We bucket datetime to the nearest minute to tolerate ±60 seconds drift.
+ * We bucket datetime to the configured window (default 5 minutes) to tolerate drift.
  * @param {object} payload
  * @param {string|Date|number} payload.datetime
  * @param {number|string} payload.amount
@@ -44,10 +50,10 @@ function computeFingerprint(payload = {}) {
   }
 
   const dt = parseToTashkentDateTime(payload.datetime);
-  const minuteBucket = Math.round(dt.toSeconds() / 60);
+  const windowBucket = Math.floor(dt.toSeconds() / FINGERPRINT_WINDOW_SECONDS);
 
   const content = [
-    minuteBucket,
+    windowBucket,
     normalizedAmount,
     normalizedCard,
     normalizeOperator(payload.operator || payload.merchant),

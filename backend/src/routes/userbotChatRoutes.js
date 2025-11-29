@@ -346,6 +346,16 @@ router.post('/process', async (req, res) => {
       });
     }
 
+    const normalizedStatus = String(record.status || '').toLowerCase();
+    if (!body.force && (normalizedStatus === 'processed' || normalizedStatus === 'processing' || normalizedStatus === 'pending')) {
+      return res.status(200).json({
+        success: true,
+        status: 'skipped',
+        detail: `Message already ${normalizedStatus}`,
+        requestId
+      });
+    }
+
     await BotMessage.updateStatus(record.id, 'processing');
 
     try {
@@ -383,7 +393,12 @@ router.post('/process', async (req, res) => {
       });
     } catch (error) {
       const code = error.code || error.meta?.code || 'PROCESS_FAILED';
-      const status = error.status || (code === 'DUPLICATE' ? 200 : code === 'NO_TEXT' ? 422 : 500);
+      const status = error.status
+        || (code === 'DUPLICATE'
+          ? 200
+          : code === 'NO_TEXT' || code === 'DECLINED'
+            ? 422
+            : 500);
       const detail = error.message || 'Failed to process message';
 
       console.error(`💥 userbot process failed for record ${record.id}:`, detail);
@@ -410,6 +425,16 @@ router.post('/process', async (req, res) => {
           code,
           detail,
           duplicates: error.meta?.duplicates || [],
+          requestId: error.meta?.requestId || requestId
+        });
+      }
+
+      if (code === 'DECLINED') {
+        return res.status(422).json({
+          success: false,
+          status: 'declined',
+          code,
+          detail,
           requestId: error.meta?.requestId || requestId
         });
       }
@@ -478,6 +503,16 @@ router.post('/process-multiple', async (req, res) => {
         if (!record) {
           summary.failed += 1;
           summary.errors.push({ recordId, code: 'NOT_FOUND', detail: 'Message not found' });
+          continue;
+        }
+
+        const normalizedStatus = String(record.status || '').toLowerCase();
+        if (normalizedStatus === 'processed' || normalizedStatus === 'processing' || normalizedStatus === 'pending') {
+          summary.errors.push({
+            recordId: record.id,
+            code: 'SKIPPED',
+            detail: `Message already ${normalizedStatus}`
+          });
           continue;
         }
 

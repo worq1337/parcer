@@ -26,15 +26,18 @@ api.interceptors.response.use(
 // ============ CHECKS API ============
 
 export const checksAPI = {
-  // Получить все чеки
-  getAll: async (filters = {}) => {
-    const params = new URLSearchParams();
-    Object.keys(filters).forEach(key => {
-      if (filters[key]) {
-        params.append(key, filters[key]);
+  // Получить все чеки (можно передать updated_after для дельты)
+  getAll: async (filters = {}, options = {}) => {
+    const params = {};
+    Object.keys(filters).forEach((key) => {
+      if (filters[key] !== undefined && filters[key] !== null && filters[key] !== '') {
+        params[key] = filters[key];
       }
     });
-    const response = await api.get(`/checks?${params.toString()}`);
+    const response = await api.get('/checks', {
+      params,
+      signal: options.signal,
+    });
     return response.data;
   },
 

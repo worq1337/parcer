@@ -10,8 +10,10 @@ API для управления Telethon userbot:
 """
 
 import asyncio
+import json
 import os
 import threading
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import config
@@ -21,6 +23,30 @@ from userbot import userbot_manager
 app = Flask(__name__)
 CORS(app)
 
+# region agent log helper
+DEBUG_LOG_PATH = r'c:\Users\Дмитрий\Desktop\parcer\parcer\.cursor\debug.log'
+DEBUG_SESSION_ID = 'debug-session'
+DEBUG_RUN_ID = 'pre-fix'
+
+
+def _agent_log(hypothesis_id: str, location: str, message: str, data=None):
+    payload = {
+        'sessionId': DEBUG_SESSION_ID,
+        'runId': DEBUG_RUN_ID,
+        'hypothesisId': hypothesis_id,
+        'location': location,
+        'message': message,
+        'data': data or {},
+        'timestamp': int(time.time() * 1000),
+    }
+    try:
+        with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as fp:
+            fp.write(json.dumps(payload, ensure_ascii=False) + '\n')
+    except Exception:
+        # Логирование не должно влиять на работу API
+        pass
+
+# endregion
 
 # Глобальный event loop для asyncio
 loop = None
@@ -46,14 +72,38 @@ def run_async(coro):
     Хелпер для запуска async функций из sync контекста Flask
     """
     # Ждем пока loop создастся (до 5 секунд)
-    import time
     timeout = 5
     start = time.time()
     while loop is None and (time.time() - start) < timeout:
         time.sleep(0.1)
 
+    wait_ms = int((time.time() - start) * 1000)
+
     if loop is None:
+        # region agent log
+        _agent_log(
+            'H1',
+            'userbot/app.py:run_async',
+            'loop_not_initialized',
+            {
+                'wait_ms': wait_ms,
+                'coro': str(coro),
+            },
+        )
+        # endregion
         raise RuntimeError("Event loop not initialized")
+
+    # region agent log
+    _agent_log(
+        'H1',
+        'userbot/app.py:run_async',
+        'loop_ready',
+        {
+            'wait_ms': wait_ms,
+            'coro': str(coro),
+        },
+    )
+    # endregion
 
     return asyncio.run_coroutine_threadsafe(coro, loop).result()
 

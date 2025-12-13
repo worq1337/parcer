@@ -5,16 +5,53 @@ patch-017 §4: Telethon Userbot
 """
 
 import os
+import json
+import time
 import asyncio
-import requests
-import psycopg2
-from datetime import datetime, timedelta, timezone
+import logging
+from typing import Optional, Tuple
+import aiohttp
+import asyncpg
+from datetime import datetime, timezone
 from telethon import TelegramClient, events
 from telethon.tl.types import User, PeerChannel, PeerChat, PeerUser, Channel, Chat
 from telethon.tl.types import InputPeerUser, InputPeerChannel, InputPeerChat
-import config
+import services.userbot.config as config
 
-BACKEND_BASE = os.getenv('BACKEND_BASE', 'http://backend:3001')
+BACKEND_BASE = os.getenv('BACKEND_BASE', config.BACKEND_URL if hasattr(config, 'BACKEND_URL') else 'http://backend:3001')
+
+# region agent log helper
+DEBUG_LOG_PATH = r'c:\Users\Дмитрий\Desktop\parcer\parcer\.cursor\debug.log'
+DEBUG_SESSION_ID = 'debug-session'
+DEBUG_RUN_ID = 'pre-fix'
+
+
+def _agent_log(hypothesis_id: str, location: str, message: str, data=None):
+    """Lightweight NDJSON logger for debug-mode instrumentation."""
+    payload = {
+        'sessionId': DEBUG_SESSION_ID,
+        'runId': DEBUG_RUN_ID,
+        'hypothesisId': hypothesis_id,
+        'location': location,
+        'message': message,
+        'data': data or {},
+        'timestamp': int(time.time() * 1000),
+    }
+    try:
+        with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as fp:
+            fp.write(json.dumps(payload, ensure_ascii=False) + '\n')
+    except Exception:
+        # Логирование не должно ломать основной поток
+        pass
+
+# endregion
+
+LOG_LEVEL = os.getenv('USERBOT_LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='[%(asctime)s] %(levelname)s %(name)s - %(message)s'
+)
+logger = logging.getLogger('userbot')
 
 
 class UserbotManager:
@@ -29,26 +66,49 @@ class UserbotManager:
     """
 
     def __init__(self):
-        self.client = None
+        self.client: Optional[TelegramClient] = None
         self.is_running = False
         self.session_path = os.path.join(config.SESSION_DIR, config.SESSION_NAME)
 
         # Обработчик для новых сообщений
         self.new_message_handler = None
+        self._handler_registered = False
+        self._lifecycle_lock = asyncio.Lock()
 
-        # Подключение к БД
-        self.db_conn = None
+        # Пулы/ресурсы
+        self.db_pool: Optional[asyncpg.Pool] = None
+        self.db_timeout = float(os.getenv('USERBOT_DB_TIMEOUT_SECONDS', '5'))
+        self.db_retries = int(os.getenv('USERBOT_DB_RETRIES', '3'))
+        self.db_retry_delay = float(os.getenv('USERBOT_DB_RETRY_DELAY', '0.2'))
+        self.db_pool_min_size = int(os.getenv('USERBOT_DB_POOL_MIN_SIZE', '1'))
+        self.db_pool_max_size = int(os.getenv('USERBOT_DB_POOL_MAX_SIZE', '5'))
+
+        self.http_session: Optional[aiohttp.ClientSession] = None
+        self.http_timeout = float(os.getenv('USERBOT_HTTP_TIMEOUT_SECONDS', '5'))
+        self.http_retries = int(os.getenv('USERBOT_HTTP_RETRIES', '3'))
+        self.http_retry_delay = float(os.getenv('USERBOT_HTTP_RETRY_DELAY', '0.3'))
+        self.http_semaphore = asyncio.Semaphore(int(os.getenv('USERBOT_BACKEND_CONCURRENCY', '3')))
 
         # Максимальный возраст сообщения, которое мы считаем «новым» (в минутах)
         self.max_message_age = int(os.getenv('USERBOT_MAX_MESSAGE_AGE_MINUTES', '30'))
 
-    async def initialize(self):
-        """
-        Инициализация Telethon клиента
-        """
-        if not config.API_ID or not config.API_HASH:
-            raise ValueError("TELEGRAM_API_ID и TELEGRAM_API_HASH должны быть установлены")
+    def _validate_config(self):
+        errors = []
+        if not config.API_ID or config.API_ID == 0:
+            errors.append("TELEGRAM_API_ID пуст")
+        if not getattr(config, 'API_HASH', ''):
+            errors.append("TELEGRAM_API_HASH пуст")
+        if not getattr(config, 'MONITOR_BOT_IDS', None):
+            errors.append("MONITOR_BOT_IDS пуст")
+        if not getattr(config, 'OUR_BOT_ID', None):
+            errors.append("OUR_BOT_ID пуст")
+        if errors:
+            raise ValueError("; ".join(errors))
 
+    async def _ensure_client(self):
+        if self.client:
+            return
+        self._validate_config()
         self.client = TelegramClient(
             self.session_path,
             config.API_ID,
@@ -56,33 +116,33 @@ class UserbotManager:
             system_version='4.16.30-vxCUSTOM'
         )
 
-        # Регистрируем обработчик сообщений с фильтром incoming=True
-        @self.client.on(events.NewMessage(incoming=True))
-        async def message_handler(event):
-            await self.handle_new_message(event)
+    async def _register_handler_once(self):
+        if self._handler_registered or not self.client:
+            return
+        self.client.add_event_handler(self.handle_new_message, events.NewMessage(incoming=True))
+        self._handler_registered = True
+        logger.info("Обработчик сообщений зарегистрирован (incoming=True)")
 
-        self.new_message_handler = message_handler
-
-        print("✅ Telethon клиент инициализирован")
-        print(f"🔍 Обработчик сообщений зарегистрирован (incoming=True)")
+    async def initialize(self):
+        """
+        Инициализация Telethon клиента и ресурсов
+        """
+        await self._ensure_client()
+        await self._register_handler_once()
+        logger.info("Telethon клиент инициализирован")
 
     async def login(self, phone_number, code=None, password=None):
         """
         Логин через номер телефона
-
-        Args:
-            phone_number: str - номер телефона в формате +998901234567
-            code: str - код из SMS (если уже получен)
-            password: str - 2FA пароль (если включена двухфакторная аутентификация)
-
-        Returns:
-            dict - статус логина
         """
         try:
+            await self._ensure_client()
+            await self._register_handler_once()
             await self.client.connect()
 
             if await self.client.is_user_authorized():
                 me = await self.client.get_me()
+                logger.info("Уже авторизован как %s", me.username)
                 return {
                     'success': True,
                     'status': 'already_authorized',
@@ -95,20 +155,19 @@ class UserbotManager:
                     }
                 }
 
-            # Отправляем код
             if not code:
                 await self.client.send_code_request(phone_number)
+                logger.info("Код отправлен на %s", phone_number)
                 return {
                     'success': True,
                     'status': 'code_sent',
                     'message': f'Код отправлен на {phone_number}'
                 }
 
-            # Вводим код
             try:
                 await self.client.sign_in(phone_number, code)
-
                 me = await self.client.get_me()
+                logger.info("Авторизован как %s", me.username)
                 return {
                     'success': True,
                     'status': 'authorized',
@@ -122,7 +181,6 @@ class UserbotManager:
                 }
 
             except Exception as code_error:
-                # Требуется 2FA пароль
                 if 'Two-step verification' in str(code_error) or 'SessionPasswordNeededError' in str(type(code_error)):
                     if not password:
                         return {
@@ -132,8 +190,8 @@ class UserbotManager:
                         }
 
                     await self.client.sign_in(password=password)
-
                     me = await self.client.get_me()
+                    logger.info("Авторизован по 2FA как %s", me.username)
                     return {
                         'success': True,
                         'status': 'authorized',
@@ -145,78 +203,129 @@ class UserbotManager:
                             'phone': me.phone
                         }
                     }
-                else:
-                    raise code_error
+                raise code_error
 
         except Exception as e:
+            logger.error("Ошибка логина: %s", e)
             return {
                 'success': False,
                 'status': 'error',
                 'error': str(e)
             }
 
+    async def _ensure_db_pool(self):
+        if self.db_pool and not getattr(self.db_pool, 'closed', False):
+            return
+        self.db_pool = None
+        self.db_pool = await asyncpg.create_pool(
+            host=os.getenv('DB_HOST', 'postgres'),
+            port=os.getenv('DB_PORT', '5432'),
+            database=os.getenv('DB_NAME', 'receipt_parser'),
+            user=os.getenv('DB_USER', 'postgres'),
+            password=os.getenv('DB_PASSWORD', 'postgres'),
+            min_size=self.db_pool_min_size,
+            max_size=self.db_pool_max_size,
+            timeout=self.db_timeout,
+        )
+        logger.info("DB pool создан (%s-%s)", self.db_pool_min_size, self.db_pool_max_size)
+
+    async def _close_db_pool(self):
+        if self.db_pool:
+            await self.db_pool.close()
+            self.db_pool = None
+            logger.info("DB pool закрыт")
+
+    async def _ensure_http_session(self):
+        if self.http_session and not self.http_session.closed:
+            return
+        self.http_session = None
+        timeout = aiohttp.ClientTimeout(total=self.http_timeout)
+        self.http_session = aiohttp.ClientSession(timeout=timeout)
+        logger.info("HTTP сессия создана (timeout=%s)", self.http_timeout)
+
+    async def _close_http_session(self):
+        if self.http_session and not self.http_session.closed:
+            await self.http_session.close()
+        self.http_session = None
+
     async def start(self):
         """
         Запуск userbot мониторинга
         """
-        if not self.client:
+        async with self._lifecycle_lock:
             await self.initialize()
+            await self.client.connect()
 
-        await self.client.connect()
+            if not await self.client.is_user_authorized():
+                return {
+                    'success': False,
+                    'error': 'Userbot не авторизован. Выполните логин сначала.'
+                }
 
-        if not await self.client.is_user_authorized():
+            await self._ensure_db_pool()
+            await self._ensure_http_session()
+
+            if self.is_running:
+                me = await self.client.get_me()
+                return {
+                    'success': True,
+                    'status': 'already_running',
+                    'user': {
+                        'id': me.id,
+                        'first_name': me.first_name,
+                        'last_name': me.last_name,
+                        'username': me.username,
+                        'phone': me.phone
+                    }
+                }
+
+            await self.client.start()
+            self.is_running = True
+
+            me = await self.client.get_me()
+
+            # Получаем реальные названия ботов из Telegram
+            bot_names_list = []
+            for bot_id in config.MONITOR_BOT_IDS:
+                try:
+                    bot_entity = await self.resolve_entity(bot_id)
+                    bot_name = bot_entity.first_name or f"ID:{bot_id}"
+                    bot_names_list.append(f"{bot_name} (@{bot_entity.username})")
+                except Exception:
+                    bot_names_list.append(f"ID:{bot_id}")
+
+            bot_names = ', '.join(bot_names_list)
+            logger.info("Userbot запущен %s (@%s), мониторим: %s", me.first_name, me.username, bot_names)
+
             return {
-                'success': False,
-                'error': 'Userbot не авторизован. Выполните логин сначала.'
+                'success': True,
+                'message': f'Userbot запущен как {me.first_name}',
+                'user': {
+                    'id': me.id,
+                    'first_name': me.first_name,
+                    'last_name': me.last_name,
+                    'username': me.username,
+                    'phone': me.phone
+                }
             }
-
-        # Запускаем клиент
-        await self.client.start()
-        self.is_running = True
-
-        me = await self.client.get_me()
-
-        # Получаем реальные названия ботов из Telegram
-        bot_names_list = []
-        for bot_id in config.MONITOR_BOT_IDS:
-            try:
-                bot_entity = await self.resolve_entity(bot_id)
-                bot_name = bot_entity.first_name or f"ID:{bot_id}"
-                bot_names_list.append(f"{bot_name} (@{bot_entity.username})")
-            except Exception:
-                bot_names_list.append(f"ID:{bot_id}")
-
-        bot_names = ', '.join(bot_names_list)
-
-        print(f"🤖 Userbot запущен: {me.first_name} (@{me.username})")
-        print(f"📡 Мониторим боты: {bot_names}")
-        print(f"🎯 Пересылаем в бот: {config.OUR_BOT_ID}")
-
-        return {
-            'success': True,
-            'message': f'Userbot запущен как {me.first_name}',
-            'user': {
-                'id': me.id,
-                'first_name': me.first_name,
-                'last_name': me.last_name,
-                'username': me.username,
-                'phone': me.phone
-            }
-        }
 
     async def stop(self):
         """
         Остановка userbot
         """
-        if self.client and self.client.is_connected():
-            await self.client.disconnect()
+        async with self._lifecycle_lock:
+            if self.client and self.client.is_connected():
+                await self.client.disconnect()
 
-        self.is_running = False
+            await self._close_http_session()
+            await self._close_db_pool()
 
-        return {
-            'success': True,
-            'message': 'Userbot остановлен'
-        }
+            self.is_running = False
+
+            return {
+                'success': True,
+                'message': 'Userbot остановлен'
+            }
 
     async def get_status(self):
         """
@@ -247,161 +356,227 @@ class UserbotManager:
                         'phone': me.phone
                     }
                 }
-            else:
-                return {
-                    'running': self.is_running,
-                    'authorized': False
-                }
+
+            return {
+                'running': self.is_running,
+                'authorized': False
+            }
 
         except Exception as e:
+            logger.error("Ошибка получения статуса: %s", e)
             return {
                 'running': False,
                 'authorized': False,
                 'error': str(e)
             }
 
-    def save_message_to_db(self, bot_id, telegram_message_id, text, message_date=None):
+    async def save_message_to_db(self, bot_id, telegram_message_id, text, message_date=None) -> bool:
         """
-        Сохранить сообщение в БД
+        Сохранить сообщение в БД (asyncpg + retry)
         Возвращает True если была вставка, False если запись уже существовала
         """
-        try:
-            # Подключение к БД (получаем из переменных окружения)
-            if not self.db_conn or self.db_conn.closed:
-                self.db_conn = psycopg2.connect(
-                    host=os.getenv('DB_HOST', 'postgres'),
-                    port=os.getenv('DB_PORT', '5432'),
-                    database=os.getenv('DB_NAME', 'receipt_parser'),
-                    user=os.getenv('DB_USER', 'postgres'),
-                    password=os.getenv('DB_PASSWORD', 'postgres')
+        await self._ensure_db_pool()
+        attempt = 1
+        sql = """INSERT INTO bot_messages
+                 (bot_id, telegram_message_id, chat_id, message_id, timestamp, text, status, process_attempts)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'new', 0)
+                 ON CONFLICT (chat_id, message_id) DO NOTHING
+                 RETURNING 1"""
+
+        while attempt <= self.db_retries:
+            try:
+                async with self.db_pool.acquire() as conn:
+                    res = await asyncio.wait_for(
+                        conn.fetchrow(
+                            sql,
+                            str(bot_id),
+                            str(telegram_message_id),
+                            str(bot_id),
+                            str(telegram_message_id),
+                            message_date or datetime.now(timezone.utc),
+                            text
+                        ),
+                        timeout=self.db_timeout
+                    )
+                    inserted = res is not None
+                    if inserted:
+                        logger.debug("Сообщение сохранено в БД (bot_id=%s)", bot_id)
+                    else:
+                        logger.debug("Сообщение уже в БД (bot_id=%s)", bot_id)
+                    _agent_log(
+                        'H3',
+                        'userbot.py:save_message_to_db',
+                        'db_upsert',
+                        {
+                            'bot_id': str(bot_id),
+                            'telegram_message_id': str(telegram_message_id),
+                            'inserted': inserted,
+                        },
+                    )
+                    return inserted
+            except Exception as db_error:
+                _agent_log(
+                    'H3',
+                    'userbot.py:save_message_to_db',
+                    'db_error',
+                    {
+                        'bot_id': str(bot_id),
+                        'telegram_message_id': str(telegram_message_id),
+                        'error': str(db_error),
+                        'attempt': attempt,
+                    },
                 )
+                logger.warning("Ошибка сохранения в БД (попытка %s/%s): %s", attempt, self.db_retries, db_error)
+                if attempt >= self.db_retries:
+                    return False
+                await asyncio.sleep(self.db_retry_delay * attempt)
+                attempt += 1
+        return False
 
-            cursor = self.db_conn.cursor()
+    def _normalize_dt(self, value) -> datetime:
+        dt = value if isinstance(value, datetime) else datetime.now(timezone.utc)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
 
-            # Вставить сообщение со статусом 'unprocessed'
-            cursor.execute(
-                """INSERT INTO bot_messages
-                   (bot_id, telegram_message_id, chat_id, message_id, timestamp, text, status, process_attempts)
-                   VALUES (%s, %s, %s, %s, %s, %s, 'new', 0)
-                   ON CONFLICT (chat_id, message_id) DO NOTHING""",
-                (
-                    str(bot_id),
-                    str(telegram_message_id),
-                    str(bot_id),
-                    str(telegram_message_id),
-                    message_date or datetime.now(timezone.utc),
-                    text
+    def _is_old_message(self, msg_dt: datetime) -> Tuple[bool, int]:
+        msg_dt = self._normalize_dt(msg_dt)
+        now_ts = datetime.now(timezone.utc)
+        age_seconds = int((now_ts - msg_dt).total_seconds())
+        return age_seconds > self.max_message_age * 60, age_seconds
+
+    async def _push_to_backend(self, payload: dict):
+        await self._ensure_http_session()
+        attempt = 1
+        while attempt <= self.http_retries:
+            try:
+                async with self.http_semaphore:
+                    start_ts = time.perf_counter()
+                    async with self.http_session.post(
+                        f"{BACKEND_BASE}/api/userbot-chat/process",
+                        json=payload
+                    ) as response:
+                        _ = await response.text()
+                        duration_ms = int((time.perf_counter() - start_ts) * 1000)
+                        _agent_log(
+                            'H4',
+                            'userbot.py:_push_to_backend',
+                            'push_backend',
+                            {
+                                'status_code': response.status,
+                                'duration_ms': duration_ms,
+                                'chat_id': payload.get('chat_id'),
+                                'message_id': payload.get('message_id'),
+                                'attempt': attempt,
+                            },
+                        )
+                        if 200 <= response.status < 500:
+                            return
+                        logger.warning("Backend ответ %s, повтор", response.status)
+            except Exception as push_error:
+                _agent_log(
+                    'H4',
+                    'userbot.py:_push_to_backend',
+                    'push_backend_failed',
+                    {
+                        'error': str(push_error),
+                        'chat_id': payload.get('chat_id'),
+                        'message_id': payload.get('message_id'),
+                        'attempt': attempt,
+                    },
                 )
-            )
-
-            inserted = cursor.rowcount > 0
-            self.db_conn.commit()
-            cursor.close()
-
-            if inserted:
-                print(f"💾 Сообщение сохранено в БД (bot_id={bot_id})")
-            else:
-                print(f"ℹ️ Сообщение уже было в БД, пропускаем вставку (bot_id={bot_id})")
-            return inserted
-
-        except Exception as db_error:
-            print(f"❌ Ошибка сохранения в БД: {db_error}")
-            if self.db_conn:
-                self.db_conn.rollback()
-            return False
+                logger.warning("[userbot] автообработка ошибка (attempt %s/%s): %s", attempt, self.http_retries, push_error)
+            if attempt >= self.http_retries:
+                return
+            await asyncio.sleep(self.http_retry_delay * attempt)
+            attempt += 1
 
     async def handle_new_message(self, event):
         """
         Обработчик новых сообщений
-
-        Проверяет, пришло ли сообщение от одного из мониторимых ботов,
-        и пересылает его в наш бот для обработки
         """
         try:
-            # Получаем отправителя
             sender = await event.get_sender()
+        except Exception as err:
+            logger.warning("Не удалось получить отправителя: %s", err)
+            return
 
-            # Логируем ВСЕ входящие сообщения для отладки
-            sender_info = f"{sender.first_name if hasattr(sender, 'first_name') else 'Unknown'} (ID: {sender.id})"
-            print(f"🔔 Входящее сообщение от: {sender_info}")
+        sender_id = getattr(sender, 'id', None)
+        sender_name = getattr(sender, 'first_name', '') or 'Unknown'
+        logger.debug("Входящее сообщение от %s (ID: %s)", sender_name, sender_id)
 
-            # Проверяем, является ли отправитель одним из мониторимых ботов
-            if isinstance(sender, User) and sender.id in config.MONITOR_BOT_IDS:
-                bot_name = sender.first_name or f"ID:{sender.id}"
-                username = f"@{sender.username}" if sender.username else ""
-                print(f"📨 Получено сообщение от бота {bot_name} {username} (ID: {sender.id})")
+        if not (isinstance(sender, User) and sender_id in config.MONITOR_BOT_IDS):
+            return
 
-                # Получаем текст сообщения
-                message_text = event.message.text
+        message_text = getattr(event.message, 'message', None) or getattr(event.message, 'raw_text', None) or ''
+        if not message_text:
+            logger.info("Сообщение без текста, пропускаем (ID: %s)", sender_id)
+            return
 
-                if not message_text:
-                    print("⚠️ Сообщение без текста, пропускаем")
-                    return
+        msg_dt = self._normalize_dt(getattr(event.message, 'date', None))
+        is_old, age_seconds = self._is_old_message(msg_dt)
+        if is_old:
+            _agent_log(
+                'H2',
+                'userbot.py:handle_new_message',
+                'skip_old_message',
+                {
+                    'sender_id': str(sender_id),
+                    'message_id': str(getattr(event.message, 'id', '')),
+                    'age_seconds': age_seconds,
+                    'max_age_minutes': self.max_message_age,
+                    'has_text': bool(message_text),
+                    'text_len': len(message_text or ''),
+                },
+            )
+            logger.info("Сообщение слишком старое (%s сек), пропускаем", age_seconds)
+            return
 
-                print(f"📝 Текст сообщения (первые 100 символов): {message_text[:100]}")
+        inserted = await self.save_message_to_db(sender_id, event.message.id, message_text, msg_dt)
+        _agent_log(
+            'H2',
+            'userbot.py:handle_new_message',
+            'process_monitored_message',
+            {
+                'sender_id': str(sender_id),
+                'message_id': str(getattr(event.message, 'id', '')),
+                'age_seconds': age_seconds,
+                'inserted': inserted,
+                'has_text': bool(message_text),
+                'text_len': len(message_text or ''),
+            },
+        )
 
-                # Проверяем «устаревшие» сообщения (например, при отложенной доставке)
-                msg_dt = getattr(event.message, 'date', None)
-                msg_dt = msg_dt if isinstance(msg_dt, datetime) else datetime.now(timezone.utc)
-                now_ts = datetime.now(timezone.utc)
-                if msg_dt.tzinfo is None:
-                    msg_dt = msg_dt.replace(tzinfo=timezone.utc)
-                age_seconds = (now_ts - msg_dt).total_seconds()
-                if age_seconds > self.max_message_age * 60:
-                    print(f"⏩ Сообщение слишком старое ({int(age_seconds/60)} мин), пропускаем автообработку")
-                    return
+        payload = {
+            'chat_id': str(sender_id),
+            'message_id': str(getattr(event.message, 'id', '')),
+            'raw_text': message_text
+        }
 
-                # Сохраняем сообщение в БД для чата (и узнаём, было ли оно новым)
-                inserted = self.save_message_to_db(sender.id, event.message.id, message_text, msg_dt)
+        if inserted:
+            asyncio.create_task(self._push_to_backend(payload))
+        else:
+            logger.debug("Автообработка не запущена: запись уже существовала")
 
-                payload = {
-                    'chat_id': str(sender.id),
-                    'message_id': str(event.message.id),
-                    'raw_text': message_text
-                }
-
-                # Автообработку запускаем только если запись действительно новая
-                if inserted:
-                    async def _auto_process():
-                        try:
-                            await asyncio.to_thread(
-                                requests.post,
-                                f"{BACKEND_BASE}/api/userbot-chat/process",
-                                json=payload,
-                                timeout=5
-                            )
-                        except Exception as push_error:
-                            print(f"[userbot] auto process failed: {push_error}")
-
-                    asyncio.create_task(_auto_process())
-                else:
-                    print("ℹ️ Автообработка не запущена: сообщение уже существовало")
-
-                # Пересылаем сообщение в наш бот
-                try:
-                    await self.client.send_message(
-                        config.OUR_BOT_ID,
-                        message_text
-                    )
-
-                    print(f"✅ Сообщение переслано в бот {config.OUR_BOT_ID}")
-
-                except Exception as forward_error:
-                    print(f"❌ Ошибка пересылки: {forward_error}")
-
-        except Exception as e:
-            print(f"❌ Ошибка обработки сообщения: {e}")
+        try:
+            await self.client.send_message(
+                config.OUR_BOT_ID,
+                message_text
+            )
+            logger.debug("Сообщение переслано в бот %s", config.OUR_BOT_ID)
+        except Exception as forward_error:
+            logger.error("Ошибка пересылки: %s", forward_error)
 
     async def run_until_disconnected(self):
         """
         Запуск userbot в режиме постоянной работы
         """
-        if not self.client:
-            await self.initialize()
+        await self.initialize()
+        start_result = await self.start()
+        if not start_result.get('success'):
+            logger.error("Не удалось запустить userbot: %s", start_result)
+            return
 
-        await self.start()
-
-        # Получаем реальные названия ботов из Telegram
         bot_names_list = []
         for bot_id in config.MONITOR_BOT_IDS:
             try:
@@ -413,11 +588,7 @@ class UserbotManager:
 
         bot_names = ', '.join(bot_names_list)
 
-        print("🔄 Userbot работает в фоновом режиме...")
-        print(f"📡 Мониторим боты: {bot_names}")
-        print(f"🎯 Пересылаем в бот ID: {config.OUR_BOT_ID}")
-        print("✅ Ожидание сообщений от банковских ботов...")
-
+        logger.info("Userbot работает в фоновом режиме, мониторим: %s", bot_names)
         await self.client.run_until_disconnected()
 
     async def load_bot_history(self, bot_id: int, bot_username: str, days: int = None):
@@ -432,7 +603,7 @@ class UserbotManager:
         Returns:
             {loaded: int, saved: int, skipped: int, errors: int}
         """
-        from history_loader import HistoryLoader
+        from services.userbot.history_loader import HistoryLoader
 
         if not self.client or not self.client.is_connected():
             return {
@@ -444,17 +615,18 @@ class UserbotManager:
             }
 
         try:
-            loader = HistoryLoader(self.client)
+            await self._ensure_db_pool()
+            loader = HistoryLoader(self.client, db_pool=self.db_pool)
             result = await loader.load_bot_history(
                 bot_id=bot_id,
                 bot_username=bot_username,
                 days=days
             )
-            loader.close()
+            await loader.close()
             return result
 
         except Exception as e:
-            print(f"❌ Ошибка при загрузке истории: {e}")
+            logger.error("Ошибка при загрузке истории: %s", e)
             return {
                 'loaded': 0,
                 'saved': 0,
